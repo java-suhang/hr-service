@@ -109,6 +109,105 @@ CREATE INDEX IX_LEAVE_REQUEST_EMP ON LEAVE_REQUEST (emp_id);
 --   NOTICE, EVAL_PERIOD, EVAL_ITEM, EVALUATION, EVAL_SCORE,
 --   JOB_POSTING, APPLICANT, INTERVIEW
 -- =====================================================================
--- (D 담당 작성 예정)
+-- D domain. Apply after A provides DEPARTMENT, JOB_POSITION and EMPLOYEE.
+CREATE TABLE NOTICE (
+    notice_id NUMBER PRIMARY KEY,
+    title VARCHAR2(200 CHAR) NOT NULL,
+    content CLOB NOT NULL,
+    is_pinned CHAR(1) DEFAULT 'N' NOT NULL CHECK (is_pinned IN ('Y','N')),
+    writer_id NUMBER NOT NULL REFERENCES EMPLOYEE(emp_id),
+    created_at DATE DEFAULT SYSDATE NOT NULL,
+    updated_at DATE DEFAULT SYSDATE NOT NULL,
+    deleted_at DATE
+);
+
+CREATE TABLE EVAL_PERIOD (
+    period_id NUMBER PRIMARY KEY,
+    name VARCHAR2(120 CHAR) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    status VARCHAR2(12) DEFAULT 'READY' NOT NULL CHECK (status IN ('READY','SELF','MANAGER','CLOSED')),
+    CHECK (end_date >= start_date)
+);
+
+CREATE TABLE EVAL_ITEM (
+    item_id NUMBER PRIMARY KEY,
+    period_id NUMBER NOT NULL REFERENCES EVAL_PERIOD(period_id),
+    name VARCHAR2(150 CHAR) NOT NULL,
+    description VARCHAR2(1000 CHAR),
+    weight NUMBER(5,2) NOT NULL CHECK (weight > 0 AND weight <= 100)
+);
+
+CREATE TABLE EVALUATION (
+    eval_id NUMBER PRIMARY KEY,
+    period_id NUMBER NOT NULL REFERENCES EVAL_PERIOD(period_id),
+    target_id NUMBER NOT NULL REFERENCES EMPLOYEE(emp_id),
+    evaluator_id NUMBER NOT NULL REFERENCES EMPLOYEE(emp_id),
+    eval_type VARCHAR2(10) NOT NULL CHECK (eval_type IN ('SELF','MANAGER')),
+    total_score NUMBER(5,4) CHECK (total_score BETWEEN 1 AND 5),
+    comment_text VARCHAR2(1000 CHAR),
+    status VARCHAR2(12) DEFAULT 'DRAFT' NOT NULL CHECK (status IN ('DRAFT','SUBMITTED')),
+    submitted_at DATE,
+    CONSTRAINT UK_EVAL_TARGET UNIQUE (period_id, target_id, eval_type)
+);
+
+CREATE TABLE EVAL_SCORE (
+    eval_id NUMBER NOT NULL REFERENCES EVALUATION(eval_id),
+    item_id NUMBER NOT NULL REFERENCES EVAL_ITEM(item_id),
+    score NUMBER NOT NULL CHECK (score BETWEEN 1 AND 5 AND score = TRUNC(score)),
+    PRIMARY KEY (eval_id, item_id)
+);
+
+CREATE TABLE JOB_POSTING (
+    posting_id NUMBER PRIMARY KEY,
+    title VARCHAR2(200 CHAR) NOT NULL,
+    dept_id NUMBER NOT NULL REFERENCES DEPARTMENT(dept_id),
+    pos_id NUMBER NOT NULL REFERENCES JOB_POSITION(pos_id),
+    description CLOB,
+    open_date DATE NOT NULL,
+    close_date DATE NOT NULL,
+    status VARCHAR2(10) DEFAULT 'OPEN' NOT NULL CHECK (status IN ('OPEN','CLOSED')),
+    CHECK (close_date >= open_date)
+);
+
+CREATE TABLE APPLICANT (
+    app_id NUMBER PRIMARY KEY,
+    posting_id NUMBER NOT NULL REFERENCES JOB_POSTING(posting_id),
+    name VARCHAR2(100 CHAR) NOT NULL,
+    email VARCHAR2(200 CHAR),
+    phone VARCHAR2(30 CHAR),
+    -- Add the foreign key when C's ATTACHMENT DDL is merged.
+    resume_file_id NUMBER,
+    stage VARCHAR2(12) DEFAULT 'APPLIED' NOT NULL CHECK (stage IN ('APPLIED','INTERVIEW','OFFER','HIRED','REJECTED')),
+    applied_at DATE DEFAULT SYSDATE NOT NULL,
+    hired_emp_id NUMBER UNIQUE REFERENCES EMPLOYEE(emp_id),
+    CONSTRAINT CK_APPLICANT_HIRED CHECK (
+        (stage = 'HIRED' AND hired_emp_id IS NOT NULL) OR (stage <> 'HIRED' AND hired_emp_id IS NULL)
+    )
+);
+
+CREATE TABLE INTERVIEW (
+    itv_id NUMBER PRIMARY KEY,
+    app_id NUMBER NOT NULL REFERENCES APPLICANT(app_id),
+    interviewer_id NUMBER NOT NULL REFERENCES EMPLOYEE(emp_id),
+    scheduled_at DATE NOT NULL,
+    score NUMBER CHECK (score BETWEEN 0 AND 100 AND score = TRUNC(score)),
+    feedback VARCHAR2(1000 CHAR)
+);
+
+CREATE SEQUENCE SEQ_NOTICE;
+CREATE SEQUENCE SEQ_EVAL_PERIOD;
+CREATE SEQUENCE SEQ_EVAL_ITEM;
+CREATE SEQUENCE SEQ_EVALUATION;
+CREATE SEQUENCE SEQ_JOB_POSTING;
+CREATE SEQUENCE SEQ_APPLICANT;
+CREATE SEQUENCE SEQ_INTERVIEW;
+
+CREATE INDEX IDX_NOTICE_PUBLIC ON NOTICE (deleted_at, is_pinned, created_at);
+CREATE INDEX IDX_EVAL_ITEM_PERIOD ON EVAL_ITEM (period_id);
+CREATE INDEX IDX_EVAL_TARGET ON EVALUATION (target_id, period_id);
+CREATE INDEX IDX_APPLICANT_POSTING ON APPLICANT (posting_id, stage);
+CREATE INDEX IDX_INTERVIEW_APP ON INTERVIEW (app_id);
+CREATE INDEX IDX_INTERVIEW_ASSIGNEE ON INTERVIEW (interviewer_id, scheduled_at);
 
 COMMIT;
