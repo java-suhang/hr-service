@@ -5,12 +5,15 @@ import com.hr.d.filter.DomainRequestFilter;
 import com.hr.d.integration.EmployeeCreator;
 import com.hr.d.service.DashboardService;
 import com.hr.d.service.Problem;
+import com.hr.service.AttendanceService;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 
 @WebServlet({"/api/dashboard/*", "/api/admin/dashboard/*"})
 public final class DashboardServlet extends DomainServlet {
+    private final AttendanceService attendance = new AttendanceService();
+
     @Override
     protected Reply route(HttpServletRequest req, Actor actor, String[] parts) {
         boolean admin = adminRoute(req, actor);
@@ -22,6 +25,7 @@ public final class DashboardServlet extends DomainServlet {
         }
         if (parts.length != 0) throw Problem.missing();
         var service = new DashboardService();
-        return ok(admin ? service.admin() : service.user(actor.id()));
+        var today = attendance.today();
+        return ok(admin ? service.admin(today) : service.user(actor.id(), today));
     }
 }

@@ -1,4 +1,4 @@
--- Test-only projections of missing A and C tables. B uses the shared schema.
+-- Test-only projections of A and C tables. B and D use the shared schema.
 CREATE TABLE DEPARTMENT (dept_id NUMBER PRIMARY KEY, name VARCHAR2(100));
 CREATE TABLE JOB_POSITION (pos_id NUMBER PRIMARY KEY, name VARCHAR2(100), pos_level NUMBER);
 CREATE TABLE EMPLOYEE (
@@ -8,6 +8,7 @@ CREATE TABLE EMPLOYEE (
 );
 CREATE TABLE APPROVAL_DOC (drafter_id NUMBER, status VARCHAR2(20));
 CREATE TABLE NOTIFICATION (emp_id NUMBER, is_read CHAR(1));
+CREATE TABLE ATTACHMENT (file_id NUMBER PRIMARY KEY);
 
 INSERT INTO DEPARTMENT VALUES (1, 'Development');
 INSERT INTO JOB_POSITION VALUES (1, 'Associate', 1);
