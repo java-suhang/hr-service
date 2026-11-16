@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>근무 규칙 · HR Admin</title>
+    <link rel="stylesheet" href="../css/common.css">
+</head>
+<body>
+<!-- 근무 규칙 (REQ-16). 피그마 화면은 없고 어드민 사이드바의 '근무 규칙' 메뉴에 연결한다. -->
+<div class="admin-shell">
+    <aside id="sidebar"></aside>
+    <div class="admin-main">
+        <header id="topbar"></header>
+        <main class="page">
+            <div class="page-head">
+                <div>
+                    <h1>근무 규칙</h1>
+                    <div class="sub">지각·조퇴·초과근무 판정과 주 근무 한도 경고에 쓰입니다</div>
+                </div>
+            </div>
+
+            <section class="card" style="max-width: 520px">
+                <form class="card-body" id="policyForm" style="padding-top: 20px">
+                    <div class="row">
+                        <div class="field">
+                            <label for="startTime">출근 시각</label>
+                            <input class="input" type="time" id="startTime" required>
+                        </div>
+                        <div class="field">
+                            <label for="endTime">퇴근 시각</label>
+                            <input class="input" type="time" id="endTime" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="field">
+                            <label for="lateGraceMin">지각 유예 (분)</label>
+                            <input class="input" type="number" id="lateGraceMin" min="0" max="120" required>
+                        </div>
+                        <div class="field">
+                            <label for="weeklyLimitHours">주 근무 한도 (시간)</label>
+                            <input class="input" type="number" id="weeklyLimitHours" min="1" max="168" required>
+                        </div>
+                    </div>
+                    <div class="notice-box" id="policyMsg" style="margin-bottom: 14px">
+                        주간 누적이 한도 4시간 전부터 '임박'으로 표시됩니다. 바꾼 규칙은 이후 출퇴근부터 적용되고, 지난 기록의 상태는 그대로입니다.
+                    </div>
+                    <button class="btn btn-primary" type="submit" id="saveBtn">저장</button>
+                </form>
+            </section>
+        </main>
+    </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/admin-work-policy.js"></script>
+</body>
+</html>
