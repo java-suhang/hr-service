@@ -1,0 +1,5 @@
+# 이 파일을 같은 폴더에 db.properties로 복사하고 값을 채운다. (db.properties는 Git에 올리지 않는다)
+db.driver=oracle.jdbc.OracleDriver
+db.url=jdbc:oracle:thin:@localhost:1521:xe
+db.user=
+db.password=

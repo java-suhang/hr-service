@@ -1,0 +1,29 @@
+# 빌드 결과
+/build/
+/bin/
+/target/
+*.class
+*.war
+
+# Eclipse
+.metadata/
+.settings/
+.project
+.classpath
+.factorypath
+/Servers/
+
+# IntelliJ / VS Code
+.idea/
+*.iml
+.vscode/
+
+# 로컬 DB 접속 정보 (db.properties.example을 복사해서 쓴다)
+src/main/java/db.properties
+
+# 업로드 파일
+/upload/
+
+# OS
+.DS_Store
+Thumbs.db
