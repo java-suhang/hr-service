@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>내 근태 · HR</title>
+    <link rel="stylesheet" href="../css/common.css">
+    <link rel="stylesheet" href="../css/attendance.css">
+</head>
+<body>
+<!-- U03 내 근태 -->
+<header id="topnav"></header>
+
+<main class="page">
+    <div class="page-head">
+        <div>
+            <h1>내 근태</h1>
+            <div class="sub" id="policyText">&nbsp;</div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-icon" id="prevMonth" type="button" aria-label="이전 달">‹</button>
+            <strong id="monthLabel"></strong>
+            <button class="btn btn-icon" id="nextMonth" type="button" aria-label="다음 달">›</button>
+        </div>
+    </div>
+
+    <section class="card today-bar">
+        <div class="today-info">
+            <span class="label">오늘</span>
+            <span id="todayText">불러오는 중…</span>
+            <span class="weekly" id="weeklyText"></span>
+        </div>
+        <div class="buttons">
+            <button class="btn btn-primary" id="checkInBtn" type="button" disabled>출근하기</button>
+            <button class="btn" id="checkOutBtn" type="button" disabled>퇴근하기</button>
+        </div>
+    </section>
+
+    <section class="stats">
+        <div class="card stat"><div class="label">근무일</div><div class="value" id="statDays">-</div></div>
+        <div class="card stat"><div class="label">총 근무</div><div class="value" id="statWork">-</div></div>
+        <div class="card stat"><div class="label">초과근무</div><div class="value" id="statOver">-</div></div>
+        <div class="card stat"><div class="label">지각 / 조퇴</div><div class="value red" id="statLate">-</div></div>
+    </section>
+
+    <section class="card">
+        <div class="calendar">
+            <div class="cal-grid" id="calendar"></div>
+        </div>
+    </section>
+</main>
+
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/attendance-common.js"></script>
+<script src="../js/attendance.js"></script>
+</body>
+</html>
