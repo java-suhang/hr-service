@@ -2,28 +2,25 @@ package com.hr.d.dao;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 public final class DashboardDao {
-    private static final String TODAY = "a.work_date >= TRUNC(SYSDATE) AND a.work_date < TRUNC(SYSDATE) + 1";
-    private static final String CHECKED_IN = "EXISTS (SELECT 1 FROM ATTENDANCE a WHERE a.emp_id = e.emp_id AND "
-            + TODAY + " AND a.check_in IS NOT NULL)";
-
-    public Map<String, Object> attendance(Connection conn, long id) throws SQLException {
+    public Map<String, Object> attendance(Connection conn, long id, LocalDate today) throws SQLException {
         return Sql.one(conn, """
                 SELECT TO_CHAR(a.check_in, 'HH24:MI') AS "checkIn",
                        TO_CHAR(a.check_out, 'HH24:MI') AS "checkOut", a.status AS "status"
-                FROM ATTENDANCE a WHERE a.emp_id = ? AND
-                """ + TODAY, id);
+                FROM ATTENDANCE a WHERE a.emp_id = ? AND a.work_date = ?
+                """, id, today);
     }
 
-    public Map<String, Object> leave(Connection conn, long id) throws SQLException {
+    public Map<String, Object> leave(Connection conn, long id, int year) throws SQLException {
         return Sql.one(conn, """
                 SELECT total_days AS "totalDays", used_days AS "usedDays",
                        total_days - used_days AS "remainingDays"
-                FROM LEAVE_BALANCE WHERE emp_id = ? AND year = EXTRACT(YEAR FROM SYSDATE)
-                """, id);
+                FROM LEAVE_BALANCE WHERE emp_id = ? AND year = ?
+                """, id, year);
     }
 
     public List<Map<String, Object>> approvals(Connection conn, long id) throws SQLException {
@@ -45,11 +42,14 @@ public final class DashboardDao {
                 """);
     }
 
-    public List<Map<String, Object>> departmentAttendance(Connection conn) throws SQLException {
+    public List<Map<String, Object>> departmentAttendance(Connection conn, LocalDate today) throws SQLException {
         return Sql.rows(conn, """
                 SELECT e.dept_id AS "deptId", COUNT(*) AS "checkedIn" FROM EMPLOYEE e
-                WHERE e.status = 'ACTIVE' AND
-                """ + CHECKED_IN + " GROUP BY e.dept_id");
+                WHERE e.status = 'ACTIVE'
+                  AND EXISTS (SELECT 1 FROM ATTENDANCE a WHERE a.emp_id = e.emp_id
+                              AND a.work_date = ? AND a.check_in IS NOT NULL)
+                GROUP BY e.dept_id
+                """, today);
     }
 
     public long activeEmployees(Connection conn) throws SQLException {

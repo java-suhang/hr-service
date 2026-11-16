@@ -21,6 +21,7 @@ export async function api(path, method = 'GET', body) {
     const response = await fetch(new URL(path, apiRoot), {
         method, headers, body: body === undefined ? undefined : JSON.stringify(body)
     });
+    if (response.status === 401) location.assign(new URL('../login.html', apiRoot));
     const result = await response.json().catch(() => null);
     if (!response.ok) throw new Error(result?.message ?? `요청 실패 (HTTP ${response.status})`);
     return result;

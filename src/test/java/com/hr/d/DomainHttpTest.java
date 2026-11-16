@@ -6,8 +6,10 @@ import com.hr.d.controller.*;
 import com.hr.d.filter.DomainRequestFilter;
 import com.hr.d.integration.EmployeeCreator;
 import com.hr.d.integration.NoticeNotifier;
+import com.hr.d.service.DashboardService;
 import com.hr.dto.LoginUser;
 import com.hr.filter.AuthFilter;
+import com.hr.service.AttendanceService;
 import com.hr.service.LeaveService;
 import jakarta.servlet.Filter;
 import jakarta.servlet.annotation.WebFilter;
@@ -53,7 +55,7 @@ class DomainHttpTest {
         database = testDatabase();
         configureSharedDatabase();
         ddl(Files.readString(Path.of("src/test/resources/team-fixtures.sql")));
-        ddl(Files.readString(Path.of("db/schema.sql")));
+        ddl(attendanceAndDomainSchema(Files.readString(Path.of("db/schema.sql"))));
 
         tomcat = new Tomcat();
         tomcat.setBaseDir(temp.toString());
@@ -171,8 +173,9 @@ class DomainHttpTest {
 
     @Test
     void dashboardsAggregateRealRowsAndScopeEmployeeData() throws Exception {
-        execute("INSERT INTO ATTENDANCE VALUES (SEQ_ATTENDANCE.NEXTVAL, 3, TRUNC(SYSDATE), SYSDATE, NULL, 'NORMAL')");
-        execute("INSERT INTO LEAVE_BALANCE VALUES (3, EXTRACT(YEAR FROM SYSDATE), 15, 2.5)");
+        var checkIn = mutate(user, "POST", "attendance/check-in", null, 200);
+        int year = LocalDate.parse(checkIn.path("date").asText()).getYear();
+        execute("INSERT INTO LEAVE_BALANCE VALUES (3, ?, 15, 2.5)", year);
         execute("INSERT INTO APPROVAL_DOC VALUES (3, 'IN_PROGRESS')");
         execute("INSERT INTO APPROVAL_DOC VALUES (4, 'IN_PROGRESS')");
         execute("INSERT INTO APPROVAL_DOC VALUES (3, 'APPROVED')");
@@ -182,8 +185,9 @@ class DomainHttpTest {
         period();
 
         var personal = get(user, "dashboard");
-        assertTrue(get(user, "attendance/today").isObject());
-        assertEquals("NORMAL", personal.at("/attendance/status").asText());
+        var attendance = get(user, "attendance/today").path("attendance");
+        assertTrue(attendance.isObject());
+        assertEquals(attendance.path("status").asText(), personal.at("/attendance/status").asText());
         assertEquals(12.5, personal.at("/leave/remainingDays").asDouble());
         assertEquals(2, personal.get("approvals").size());
         assertEquals(1, personal.get("unreadNotifications").asLong());
@@ -200,6 +204,26 @@ class DomainHttpTest {
     }
 
     @Test
+    void dashboardUsesTheSuppliedBusinessDateAndYearAtNewYear() throws Exception {
+        LocalDate newYear = LocalDate.of(new AttendanceService().today().getYear() + 1, 1, 1);
+        LocalDate previousDay = newYear.minusDays(1);
+        execute("INSERT INTO ATTENDANCE VALUES (SEQ_ATTENDANCE.NEXTVAL, 3, ?, ?, NULL, 'NORMAL')",
+                java.sql.Date.valueOf(newYear), Timestamp.valueOf(newYear.atTime(9, 0)));
+        execute("INSERT INTO LEAVE_BALANCE VALUES (3, ?, 15, 2)", newYear.getYear());
+        execute("INSERT INTO LEAVE_BALANCE VALUES (3, ?, 8, 1)", previousDay.getYear());
+
+        var dashboard = new DashboardService();
+        JsonNode today = JSON.valueToTree(dashboard.user(3, newYear));
+        assertEquals("09:00", today.at("/attendance/checkIn").asText());
+        assertEquals(13.0, today.at("/leave/remainingDays").asDouble());
+        JsonNode yesterday = JSON.valueToTree(dashboard.user(3, previousDay));
+        assertTrue(yesterday.path("attendance").isNull());
+        assertEquals(7.0, yesterday.at("/leave/remainingDays").asDouble());
+        assertEquals(1L, dashboard.admin(newYear).get("checkedIn"));
+        assertEquals(0L, dashboard.admin(previousDay).get("checkedIn"));
+    }
+
+    @Test
     void dashboardKeepsNoticesWhenTeamTablesAreUnavailable() throws Exception {
         execute("ALTER TABLE ATTENDANCE RENAME TO TEST_ATTENDANCE_OFF");
         try {
@@ -210,6 +234,21 @@ class DomainHttpTest {
             assertTrue(get(admin, "admin/dashboard").get("attendanceRate").isNull());
         } finally {
             execute("ALTER TABLE TEST_ATTENDANCE_OFF RENAME TO ATTENDANCE");
+        }
+    }
+
+    @Test
+    void dashboardKeepsNoticesWhenApprovalTableHasNotBeenIntegrated() throws Exception {
+        notice("공지 유지", "내용", false);
+        execute("ALTER TABLE APPROVAL_DOC RENAME TO TEST_APPROVAL_OFF");
+        try {
+            var personal = get(user, "dashboard");
+            assertTrue(personal.path("approvals").isNull());
+            assertEquals("approvals", personal.at("/unavailable/0").asText());
+            assertEquals("공지 유지", personal.at("/notices/0/title").asText());
+            assertTrue(get(admin, "admin/dashboard").path("pendingApprovals").isNull());
+        } finally {
+            execute("ALTER TABLE TEST_APPROVAL_OFF RENAME TO APPROVAL_DOC");
         }
     }
 
@@ -437,6 +476,16 @@ class DomainHttpTest {
             dbProperties = path;
             props.store(output, "Tests only");
         }
+    }
+
+    private static String attendanceAndDomainSchema(String schema) {
+        int attendance = schema.indexOf("\n-- B · ");
+        int approval = schema.indexOf("\n-- C · ");
+        int domain = schema.indexOf("\n-- D · ");
+        if (attendance < 0 || approval <= attendance || domain <= approval) {
+            throw new IllegalStateException("공용 DDL에 B·C·D 구역이 필요합니다.");
+        }
+        return schema.substring(attendance, approval) + schema.substring(domain);
     }
 
     private static void ddl(String script) throws SQLException {
