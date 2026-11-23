@@ -13,8 +13,6 @@ import java.util.Properties;
  * 접속 정보는 클래스패스의 db.properties에서 읽는다 (db.properties.example 참고).
  * 여러 테이블을 바꾸는 작업은 tx()로 감싸 한 트랜잭션에서 처리하고,
  * 다른 도메인의 Service는 Connection을 인자로 받아 같은 트랜잭션에 합류한다.
- *
- * [임시] A의 공통 모듈이 들어오면 그쪽 DBUtil로 바꾼다.
  */
 public final class DBUtil {
 
@@ -41,6 +39,12 @@ public final class DBUtil {
             throw new IllegalStateException("db.properties를 읽을 수 없습니다", e);
         }
         return p;
+    }
+
+    /** db.properties의 다른 설정값 (예: upload.dir). 없으면 null */
+    public static String property(String key) {
+        String v = PROPS.getProperty(key);
+        return v == null || v.isBlank() ? null : v.trim();
     }
 
     public static Connection getConnection() throws SQLException {

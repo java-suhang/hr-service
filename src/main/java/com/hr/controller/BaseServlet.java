@@ -2,6 +2,7 @@ package com.hr.controller;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.YearMonth;
@@ -26,8 +27,7 @@ import jakarta.servlet.http.HttpSession;
  *  - 요청 UTF-8, 응답 JSON
  *  - ApiException → 해당 상태 코드 + {"message"}, 그 밖의 예외 → 500
  *  - 로그인 사용자, 경로 조각, 입력값 파싱 도우미
- *
- * [임시] A 담당. A의 BaseServlet이 들어오면 그쪽에 맞춘다.
+ *  - DB 제약 조건 위반(중복·참조·CHECK)은 4xx로 바꿔 응답한다
  */
 public abstract class BaseServlet extends HttpServlet {
 
@@ -41,10 +41,41 @@ public abstract class BaseServlet extends HttpServlet {
             super.service(req, resp);
         } catch (ApiException e) {
             sendError(resp, e.getStatus(), e.getMessage());
+        } catch (IllegalStateException e) {
+            if (e.getCause() instanceof SQLException sql && sqlStatus(sql) > 0) {
+                sendError(resp, sqlStatus(sql), sqlMessage(sql));
+                return;
+            }
+            LOG.log(Level.SEVERE, "요청 처리 실패: " + req.getMethod() + " " + req.getRequestURI(), e);
+            sendError(resp, 500, "서버 오류가 발생했습니다");
         } catch (RuntimeException e) {
             LOG.log(Level.SEVERE, "요청 처리 실패: " + req.getMethod() + " " + req.getRequestURI(), e);
             sendError(resp, 500, "서버 오류가 발생했습니다");
         }
+    }
+
+    /**
+     * 제약 조건 위반을 사용자 오류로 바꾼다 (Oracle 오류 코드, H2·표준 SQLState).
+     * 0이면 서버 오류로 처리한다.
+     */
+    private static int sqlStatus(SQLException e) {
+        String state = e.getSQLState() == null ? "" : e.getSQLState();
+        int code = e.getErrorCode();
+        if (code == 1 || state.equals("23505")) return 409;                      // 중복
+        if (code == 2291 || state.equals("23506")) return 400;                   // 참조 대상 없음
+        if (code == 2292 || state.equals("23503")) return 409;                   // 사용 중이라 삭제 불가
+        if (code == 2290 || code == 1400 || state.equals("23513") || state.equals("23502")) return 400; // CHECK, NOT NULL
+        if (state.startsWith("08")) return 503;                                  // 연결 실패
+        return 0;
+    }
+
+    private static String sqlMessage(SQLException e) {
+        return switch (sqlStatus(e)) {
+            case 409 -> (e.getErrorCode() == 2292 || "23503".equals(e.getSQLState()))
+                    ? "다른 데이터에서 사용 중이라 처리할 수 없습니다" : "이미 존재하는 값입니다";
+            case 503 -> "데이터베이스에 연결할 수 없습니다";
+            default -> "입력값이 올바르지 않습니다";
+        };
     }
 
     // ------------------------------------------------------------------ 응답
@@ -113,6 +144,11 @@ public abstract class BaseServlet extends HttpServlet {
         }
         String s = value.toString().trim();
         return s.isEmpty() ? null : s;
+    }
+
+    /** 공백을 자르지 않는 문자열 (비밀번호). 문자열이 아니면 null */
+    protected static String raw(Object value) {
+        return value instanceof String s ? s : null;
     }
 
     protected static String requireText(Object value, String field) {

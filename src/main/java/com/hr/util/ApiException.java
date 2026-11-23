@@ -3,8 +3,6 @@ package com.hr.util;
 /**
  * HTTP 상태 코드와 사용자에게 보여줄 메시지를 함께 던지는 예외.
  * BaseServlet이 잡아서 {"message": "..."} 형식으로 응답한다.
- *
- * [임시] A의 공통 모듈이 들어오면 그쪽 예외로 바꾼다.
  */
 public class ApiException extends RuntimeException {
 

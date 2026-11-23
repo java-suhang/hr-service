@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>재직증명서 · HR</title>
+    <style>
+        body { font-family: "Pretendard", "Malgun Gothic", sans-serif; background: #f5f6f8; margin: 0; color: #111827; }
+        .toolbar { display: flex; justify-content: center; gap: 8px; padding: 16px; }
+        .toolbar button { height: 36px; padding: 0 16px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
+        .toolbar .primary { background: #2f5bea; color: #fff; border-color: #2f5bea; }
+        .paper { width: 210mm; min-height: 297mm; margin: 0 auto 32px; background: #fff; padding: 28mm 24mm; box-sizing: border-box; }
+        h1 { text-align: center; font-size: 30px; letter-spacing: 16px; margin: 0 0 18mm; }
+        table { width: 100%; border-collapse: collapse; font-size: 15px; }
+        th, td { border: 1px solid #111827; padding: 12px 14px; text-align: left; }
+        th { width: 28%; background: #f3f4f6; font-weight: 600; }
+        .purpose { margin: 14mm 0 0; font-size: 15px; line-height: 2; text-align: center; }
+        .issued { text-align: center; margin-top: 20mm; font-size: 16px; }
+        .company { text-align: center; margin-top: 12mm; font-size: 20px; font-weight: 700; letter-spacing: 4px; }
+        .no { font-size: 12px; color: #6b7280; margin-bottom: 10mm; }
+        .error { text-align: center; color: #dc2626; padding: 40px; }
+        @media print { body { background: #fff; } .toolbar { display: none; } .paper { margin: 0; } }
+    </style>
+</head>
+<body>
+<!-- 재직증명서 (REQ-22): 브라우저 인쇄로 PDF 저장 -->
+<div class="toolbar">
+    <button type="button" class="primary" onclick="window.print()">인쇄 · PDF 저장</button>
+    <button type="button" onclick="window.close()">닫기</button>
+</div>
+<div class="paper" id="paper"><div class="error">불러오는 중…</div></div>
+
+<script>
+(function () {
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = (iso) => { const [y, m, d] = iso.split('-'); return `${y}년 ${Number(m)}월 ${Number(d)}일`; };
+    fetch('../api/me', { credentials: 'same-origin' })
+        .then((res) => {
+            if (res.status === 401) { location.href = '../login.html'; throw new Error('로그인이 필요합니다'); }
+            return res.json().then((data) => { if (!res.ok) throw new Error(data.message); return data; });
+        })
+        .then((me) => {
+            if (me.status === 'RESIGNED') throw new Error('재직 중인 직원만 발급할 수 있습니다');
+            const today = new Date();
+            const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const no = `제 ${today.getFullYear()}-${esc(me.empNo)}-${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')} 호`;
+            document.getElementById('paper').innerHTML = `
+                <div class="no">${no}</div>
+                <h1>재직증명서</h1>
+                <table>
+                    <tr><th>성명</th><td>${esc(me.name)}</td></tr>
+                    <tr><th>사번</th><td>${esc(me.empNo)}</td></tr>
+                    <tr><th>소속</th><td>${esc(me.deptName || '-')}</td></tr>
+                    <tr><th>직급</th><td>${esc(me.posName || '-')}</td></tr>
+                    <tr><th>재직 기간</th><td>${fmt(me.hireDate)} ~ 현재</td></tr>
+                </table>
+                <p class="purpose">위 사람은 현재 당사에 재직 중임을 증명합니다.</p>
+                <div class="issued">${fmt(iso)}</div>
+                <div class="company">HR Service 주식회사</div>`;
+        })
+        .catch((e) => { document.getElementById('paper').innerHTML = `<div class="error">${esc(e.message)}</div>`; });
+})();
+</script>
+</body>
+</html>
