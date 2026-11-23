@@ -362,8 +362,7 @@ CREATE TABLE APPLICANT (
     name VARCHAR2(100 CHAR) NOT NULL,
     email VARCHAR2(200 CHAR),
     phone VARCHAR2(30 CHAR),
-    -- Add the foreign key when C's ATTACHMENT DDL is merged.
-    resume_file_id NUMBER,
+    resume_file_id NUMBER REFERENCES ATTACHMENT(file_id),
     stage VARCHAR2(12) DEFAULT 'APPLIED' NOT NULL CHECK (stage IN ('APPLIED','INTERVIEW','OFFER','HIRED','REJECTED')),
     applied_at DATE DEFAULT SYSDATE NOT NULL,
     hired_emp_id NUMBER UNIQUE REFERENCES EMPLOYEE(emp_id),

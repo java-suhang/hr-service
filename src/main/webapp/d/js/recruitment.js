@@ -1,5 +1,5 @@
 import {api, bar, button, content, dateTime, dialog, fetchAll, field, formValues, h, init, input,
-    labels, pages, panel, run, select, session, table, textarea} from './ui.js';
+    labels, notify, pages, panel, run, select, session, table, textarea} from './ui.js';
 
 const adminRoot = 'admin/recruitment';
 const nextStage = {APPLIED: 'INTERVIEW', INTERVIEW: 'OFFER'};
@@ -137,6 +137,7 @@ init(async admin => {
         selected.replaceChildren(panel(applicant.name,
             h('p', {className: 'muted'}, `${applicant.posting} · ${labels[applicant.stage]} · ${dateTime(applicant.appliedAt)} 지원`),
             h('p', {}, [applicant.email, applicant.phone].filter(Boolean).join(' · ')),
+            resume(applicant),
             applicant.hiredEmpId ? h('p', {}, `등록된 직원 ID ${applicant.hiredEmpId}`) : null,
             applicant.stage === 'OFFER' && !session.employeeCreationEnabled
                 ? h('p', {className: 'muted'}, '직원 전환은 인사 서비스 연동이 필요합니다.') : null,
@@ -153,6 +154,29 @@ init(async admin => {
             ])), pages(data, load));
         }
         await load();
+    }
+
+    /** 이력서 보기·올리기 (C 첨부파일 API, PDF·JPG·PNG 5MB 이하) */
+    function resume(applicant) {
+        const file = h('input', {type: 'file', accept: '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png',
+            hidden: true, onchange: () => run(async () => {
+                const chosen = file.files[0];
+                if (!chosen) return;
+                if (chosen.size > 5 * 1024 * 1024) throw new Error('이력서는 5MB까지 올릴 수 있습니다.');
+                const form = new FormData();
+                form.append('file', chosen);
+                const response = await fetch(new URL(`../../api/admin/files/applicants/${applicant.applicantId}`,
+                    import.meta.url), {method: 'POST', body: form});
+                const result = await response.json().catch(() => null);
+                if (!response.ok) throw new Error(result?.message ?? `이력서를 올리지 못했습니다 (HTTP ${response.status})`);
+                await displayApplicant(applicant.applicantId);
+                notify('이력서를 올렸습니다.');
+            })});
+        const view = applicant.resumeFileId
+            ? h('a', {href: new URL(`../../api/files/${applicant.resumeFileId}`, import.meta.url).href,
+                target: '_blank', rel: 'noopener'}, '이력서 보기')
+            : h('span', {className: 'muted'}, '등록된 이력서 없음');
+        return bar(view, button(applicant.resumeFileId ? '이력서 바꾸기' : '이력서 올리기', () => file.click()), file);
     }
 
     function stageButton(applicant, stage) {
