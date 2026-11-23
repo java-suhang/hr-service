@@ -1,5 +1,5 @@
 /*
- * 공통 API 호출 — [임시] A 담당. A의 api.js가 들어오면 교체한다.
+ * 공통 API 호출 (사용자·어드민 화면 공용)
  *
  *   const data = await api.get('attendance', { month: '2026-11' });
  *   await api.post('leaves', { leaveType: 'ANNUAL', ... });

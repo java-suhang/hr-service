@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>내 정보 · HR</title>
+    <link rel="stylesheet" href="../css/common.css">
+</head>
+<body>
+<!-- 내 정보 · 비밀번호 변경 · 증명서 · 조직도 (REQ-03, REQ-07, REQ-22) -->
+<header id="topnav"></header>
+
+<main class="page">
+    <div class="page-head">
+        <div>
+            <h1>내 정보</h1>
+            <div class="sub">정보가 틀리면 인사팀에 수정을 요청하세요</div>
+        </div>
+        <div class="actions">
+            <a class="btn" href="certificate.html" target="_blank" rel="noopener">재직증명서 발급</a>
+            <button class="btn btn-primary" id="openPw" type="button">비밀번호 변경</button>
+        </div>
+    </div>
+
+    <section class="card">
+        <div class="card-head"><h2>인사 정보</h2></div>
+        <div class="card-body"><dl class="info-list" id="info"></dl></div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+        <div class="card-head"><h2>조직도</h2><span class="sub" id="orgSub"></span></div>
+        <div class="card-body"><div class="org-grid" id="org"></div></div>
+    </section>
+</main>
+
+<dialog class="modal" id="pwModal">
+    <form id="pwForm">
+        <div class="modal-head">비밀번호 변경</div>
+        <div class="modal-body">
+            <div class="field">
+                <label for="pwCurrent">현재 비밀번호</label>
+                <input class="input" type="password" id="pwCurrent" autocomplete="current-password" required>
+            </div>
+            <div class="field">
+                <label for="pwNew">새 비밀번호 (8자 이상, 영문+숫자)</label>
+                <input class="input" type="password" id="pwNew" autocomplete="new-password" required>
+            </div>
+            <div class="field">
+                <label for="pwConfirm">새 비밀번호 확인</label>
+                <input class="input" type="password" id="pwConfirm" autocomplete="new-password" required>
+            </div>
+            <div class="form-error" id="pwError" role="alert"></div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" type="button" data-close="pwModal">취소</button>
+            <button class="btn btn-primary" type="submit">변경</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/me.js"></script>
+</body>
+</html>

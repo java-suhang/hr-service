@@ -1,10 +1,10 @@
 /*
- * 공통 레이아웃 (사용자 상단 메뉴, 어드민 사이드바) — [임시] A 담당. A의 레이아웃이 들어오면 교체한다.
+ * 공통 레이아웃 (사용자 상단 메뉴, 어드민 사이드바)
  *
  *   <header id="topnav"></header>      → Layout.user('attendance')
  *   <aside id="sidebar"></aside> + <header id="topbar"></header> → Layout.admin('attendance')
  *
- * 메뉴 주소는 피그마 화면 이름을 따른 예상 경로다. 다른 담당자 화면이 생기면 맞춘다.
+ * 메뉴 주소는 피그마 화면 이름을 따른다. 오른쪽 위에 내 정보(이름·부서) 링크와 로그아웃 버튼을 둔다.
  */
 (function () {
     const USER_MENU = [
@@ -39,16 +39,31 @@
         ]],
     ];
 
-    function userChip() {
+    /** 오른쪽 위: 이름·부서 (내 정보로 이동) + 로그아웃. inAdmin이면 사용자 화면 경로로 링크한다. */
+    function userChip(inAdmin) {
         const chip = document.createElement('div');
         chip.className = 'user-chip';
-        chip.innerHTML = '<span class="avatar"></span><span class="name"></span>';
-        // 로그인 사용자 정보 API는 A 담당 (예상 경로). 없으면 이름 칸을 비워 둔다.
+        chip.innerHTML = '<a class="me-link" href="' + (inAdmin ? '../user/me.html' : 'me.html') + '">'
+            + '<span class="avatar"></span><span class="name"></span></a>'
+            + (inAdmin ? '<a class="link-btn" href="../user/home.html">사용자 화면</a>' : '')
+            + '<button type="button" class="link-btn" data-logout>로그아웃</button>';
         api.get('auth/me').then((me) => {
             if (!me) return;
+            if (!inAdmin && me.admin) {
+                const a = document.createElement('a');
+                a.className = 'link-btn';
+                a.href = '../admin/dashboard.html';
+                a.textContent = '관리자 화면';
+                chip.insertBefore(a, chip.querySelector('[data-logout]'));
+            }
             const dept = me.deptName ? ' · ' + me.deptName : '';
             chip.querySelector('.name').textContent = (me.name || '') + dept;
+            chip.querySelector('.avatar').textContent = (me.name || '?').charAt(0);
         }).catch(() => {});
+        chip.querySelector('[data-logout]').addEventListener('click', async () => {
+            try { await api.post('auth/logout'); } catch (e) { /* 이미 로그아웃 */ }
+            location.href = new URL('../login.html', location.href).href;
+        });
         return chip;
     }
 
@@ -65,7 +80,7 @@
             if (key === active) a.className = 'active';
             nav.appendChild(a);
         });
-        header.appendChild(userChip());
+        header.appendChild(userChip(false));
     }
 
     function admin(active) {
@@ -92,7 +107,7 @@
         const topbar = document.getElementById('topbar');
         if (topbar) {
             topbar.className = 'topbar';
-            topbar.appendChild(userChip());
+            topbar.appendChild(userChip(true));
         }
     }
 

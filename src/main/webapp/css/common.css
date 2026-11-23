@@ -1,5 +1,5 @@
 /*
- * 공통 스타일 — [임시] A 담당. A의 common.css가 들어오면 교체한다.
+ * 공통 스타일 (사용자·어드민 화면 공용)
  * 피그마 U·A 화면의 색·간격을 따른다.
  */
 :root {
@@ -66,7 +66,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .topnav nav a { color: var(--muted); padding: 17px 0; border-bottom: 2px solid transparent; }
 .topnav nav a.active { color: var(--text); font-weight: 700; border-bottom-color: var(--text); }
 .user-chip { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
-.user-chip .avatar { width: 28px; height: 28px; border-radius: 50%; background: #c7d2fe; }
+.user-chip { gap: 14px; }
+.user-chip .me-link { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
+.user-chip .avatar {
+    width: 28px; height: 28px; border-radius: 50%; background: #c7d2fe; color: #3730a3;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+}
+.user-chip .link-btn { color: var(--muted); font-size: 13px; }
+.user-chip .link-btn:hover { color: var(--text); }
 
 /* ---------------------------------------------------------------- 어드민 레이아웃 */
 .admin-shell { display: flex; min-height: 100vh; }
@@ -252,3 +259,36 @@ dialog.modal::backdrop { background: rgba(15, 23, 42, .45); }
     .sidebar { display: none; }
     .page-head { flex-direction: column; align-items: flex-start; }
 }
+
+/* ---------------------------------------------------------------- 로그인 (A) */
+.login-shell { display: flex; min-height: 100vh; }
+.login-brand {
+    flex: 1; background: var(--primary); color: #fff; padding: 56px;
+    display: flex; flex-direction: column; justify-content: space-between;
+}
+.login-brand .logo { font-size: 24px; font-weight: 800; }
+.login-brand h1 { font-size: 36px; line-height: 1.3; margin: 0; letter-spacing: -0.5px; }
+.login-brand p { color: #dbe4ff; margin: 14px 0 0; }
+.login-brand .copy { color: #a5b8f5; font-size: 12px; }
+.login-panel { width: 560px; background: var(--surface); display: flex; align-items: center; justify-content: center; }
+.login-panel form { width: 360px; }
+.login-panel h2 { font-size: 22px; margin: 0 0 4px; }
+.login-panel .sub { color: var(--muted); margin-bottom: 24px; }
+.login-panel .btn { width: 100%; height: 44px; }
+.form-error { color: var(--red); font-size: 13px; min-height: 20px; margin: 4px 0 8px; }
+@media (max-width: 860px) {
+    .login-brand { display: none; }
+    .login-panel { width: 100%; }
+}
+
+/* ---------------------------------------------------------------- 정보 목록 · 조직도 (A) */
+.info-list { margin: 0; }
+.info-list div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--gray-weak); }
+.info-list div:last-child { border-bottom: none; }
+.info-list dt { color: var(--muted); }
+.info-list dd { margin: 0; text-align: right; }
+.org-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.org-member { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gray-weak); }
+.org-member:last-child { border-bottom: none; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.json-cell { max-width: 360px; white-space: pre-wrap; word-break: break-all; color: var(--muted); }

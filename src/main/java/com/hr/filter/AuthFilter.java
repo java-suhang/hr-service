@@ -15,12 +15,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 /**
- * 로그인·권한 검사 (NFR-03: 권한 검사는 서버 필터에서).
+ * 로그인·권한 검사 (REQ-02, NFR-03: 권한 검사는 서버 필터에서).
  *  - /api/**, /user/**, /admin/** 는 로그인 필요
  *  - /api/admin/**, /admin/** 는 ADMIN만
- *  - /api/auth/** (로그인 API)는 통과
+ *  - /api/auth/** 는 통과 (로그인 API. me·password는 AuthServlet이 직접 로그인을 확인)
  *
- * [임시] A 담당. A의 AuthFilter가 들어오면 이 파일은 교체된다.
+ * 경로는 디코딩된 servletPath + pathInfo로 판단한다. "%61dmin/..." 같은 인코딩 우회를 막는다.
  */
 @WebFilter(urlPatterns = { "/api/*", "/user/*", "/admin/*" })
 public class AuthFilter implements Filter {
@@ -30,7 +30,7 @@ public class AuthFilter implements Filter {
             throws IOException, ServletException {
         HttpServletRequest request = (HttpServletRequest) req;
         HttpServletResponse response = (HttpServletResponse) res;
-        String path = request.getRequestURI().substring(request.getContextPath().length());
+        String path = request.getServletPath() + (request.getPathInfo() == null ? "" : request.getPathInfo());
 
         if (path.startsWith("/api/auth/")) {
             chain.doFilter(req, res);
@@ -60,6 +60,10 @@ public class AuthFilter implements Filter {
             return;
         }
 
+        if (!api) {
+            // 로그아웃 뒤 뒤로가기로 화면이 보이지 않게 한다
+            response.setHeader("Cache-Control", "no-store");
+        }
         chain.doFilter(req, res);
     }
 

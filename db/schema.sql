@@ -13,7 +13,79 @@
 -- A · 공통 · 인사
 --   DEPARTMENT, JOB_POSITION, EMPLOYEE, AUDIT_LOG
 -- =====================================================================
--- (A 담당 작성 예정)
+-- 부서
+CREATE SEQUENCE SEQ_DEPARTMENT START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE DEPARTMENT (
+    dept_id     NUMBER            CONSTRAINT PK_DEPARTMENT PRIMARY KEY,
+    name        VARCHAR2(50 CHAR) NOT NULL,
+    created_at  DATE              DEFAULT SYSDATE NOT NULL,
+    CONSTRAINT UK_DEPARTMENT_NAME UNIQUE (name)
+);
+
+-- 직급: pos_level이 클수록 상위 직급
+CREATE SEQUENCE SEQ_JOB_POSITION START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE JOB_POSITION (
+    pos_id     NUMBER            CONSTRAINT PK_JOB_POSITION PRIMARY KEY,
+    name       VARCHAR2(30 CHAR) NOT NULL,
+    pos_level  NUMBER(2)         NOT NULL,
+    CONSTRAINT UK_JOB_POSITION_NAME  UNIQUE (name),
+    CONSTRAINT CK_JOB_POSITION_LEVEL CHECK (pos_level BETWEEN 1 AND 99)
+);
+
+-- 직원 = 로그인 계정. 상사(manager_id)가 결재 1단계와 상사평가자가 된다.
+-- 삭제하지 않고 status를 RESIGNED로 바꾼다. password_hash는 PBKDF2 (PasswordUtil 참고).
+CREATE SEQUENCE SEQ_EMPLOYEE START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE EMPLOYEE (
+    emp_id         NUMBER             CONSTRAINT PK_EMPLOYEE PRIMARY KEY,
+    emp_no         VARCHAR2(20)       NOT NULL,
+    login_id       VARCHAR2(30)       NOT NULL,
+    password_hash  VARCHAR2(200)      NOT NULL,
+    name           VARCHAR2(50 CHAR)  NOT NULL,
+    email          VARCHAR2(100),
+    phone          VARCHAR2(20),
+    dept_id        NUMBER             CONSTRAINT FK_EMPLOYEE_DEPT REFERENCES DEPARTMENT (dept_id),
+    pos_id         NUMBER             CONSTRAINT FK_EMPLOYEE_POS REFERENCES JOB_POSITION (pos_id),
+    manager_id     NUMBER             CONSTRAINT FK_EMPLOYEE_MANAGER REFERENCES EMPLOYEE (emp_id),
+    role           VARCHAR2(10)       DEFAULT 'USER' NOT NULL,
+    hire_date      DATE               NOT NULL,
+    status         VARCHAR2(10)       DEFAULT 'ACTIVE' NOT NULL,
+    created_at     DATE               DEFAULT SYSDATE NOT NULL,
+    updated_at     DATE               DEFAULT SYSDATE NOT NULL,
+    CONSTRAINT UK_EMPLOYEE_EMP_NO   UNIQUE (emp_no),
+    CONSTRAINT UK_EMPLOYEE_LOGIN_ID UNIQUE (login_id),
+    CONSTRAINT CK_EMPLOYEE_ROLE     CHECK (role IN ('USER', 'ADMIN')),
+    CONSTRAINT CK_EMPLOYEE_STATUS   CHECK (status IN ('ACTIVE', 'LEAVE', 'RESIGNED')),
+    CONSTRAINT CK_EMPLOYEE_MANAGER  CHECK (manager_id IS NULL OR manager_id <> emp_id)
+);
+
+CREATE INDEX IX_EMPLOYEE_DEPT ON EMPLOYEE (dept_id);
+CREATE INDEX IX_EMPLOYEE_MANAGER ON EMPLOYEE (manager_id);
+
+-- 감사 로그: 누가 언제 어떤 데이터를 바꿨는지. before_val/after_val은 JSON 문자열 (비밀번호는 남기지 않는다).
+CREATE SEQUENCE SEQ_AUDIT_LOG START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE AUDIT_LOG (
+    log_id        NUMBER        CONSTRAINT PK_AUDIT_LOG PRIMARY KEY,
+    actor_id      NUMBER        CONSTRAINT FK_AUDIT_LOG_ACTOR REFERENCES EMPLOYEE (emp_id),
+    action        VARCHAR2(20)  NOT NULL,
+    target_table  VARCHAR2(30)  NOT NULL,
+    target_id     NUMBER,
+    before_val    CLOB,
+    after_val     CLOB,
+    created_at    DATE          DEFAULT SYSDATE NOT NULL
+);
+
+CREATE INDEX IX_AUDIT_LOG_TARGET ON AUDIT_LOG (target_table, target_id);
+CREATE INDEX IX_AUDIT_LOG_CREATED ON AUDIT_LOG (created_at);
+
+-- A 재실행용 (B·C·D 테이블을 먼저 지운 뒤, 필요할 때만 주석을 풀어 실행)
+-- DROP TABLE AUDIT_LOG;     DROP SEQUENCE SEQ_AUDIT_LOG;
+-- DROP TABLE EMPLOYEE;      DROP SEQUENCE SEQ_EMPLOYEE;
+-- DROP TABLE JOB_POSITION;  DROP SEQUENCE SEQ_JOB_POSITION;
+-- DROP TABLE DEPARTMENT;    DROP SEQUENCE SEQ_DEPARTMENT;
 
 
 -- =====================================================================

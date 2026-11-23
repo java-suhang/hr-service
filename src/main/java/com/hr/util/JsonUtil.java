@@ -24,8 +24,6 @@ import java.util.Map;
  * toJson: Map, List, 배열, 문자열, 숫자, boolean, 날짜, record, getter가 있는 DTO를 JSON으로 바꾼다.
  *         날짜는 YYYY-MM-DD, 일시는 YYYY-MM-DDTHH:mm, 시각은 HH:mm (API 규칙).
  * parse:  JSON 문자열을 Map / List / String / BigDecimal / Boolean / null로 읽는다.
- *
- * [임시] A의 공통 모듈이 들어오면 그쪽 JsonUtil로 바꾼다.
  */
 public final class JsonUtil {
 
