@@ -157,9 +157,13 @@ public class ApprovalService {
             throw ApiException.badRequest("의견은 " + COMMENT_MAX + "자까지 입력할 수 있습니다");
         }
         return DBUtil.tx(conn -> {
-            if (!dao.lock(conn, docId)) {
+            // 잠금 순서: 원본(휴가·경비) → 결재 문서. 기안자 취소도 같은 순서라 서로 기다리다 멈추지 않는다
+            Doc peek = dao.find(conn, docId);
+            if (peek == null) {
                 throw ApiException.notFound("결재 문서를 찾을 수 없습니다");
             }
+            dao.lockRef(conn, peek.docType(), peek.refId());
+            dao.lock(conn, docId);
             Doc doc = dao.find(conn, docId);
             Actor actor = actor(conn, actorId);
             if (!canView(conn, doc, actor)) {

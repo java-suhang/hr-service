@@ -136,6 +136,22 @@ public class ApprovalDAO {
         }
     }
 
+    /**
+     * 원본 문서(휴가 신청·경비) 행을 잠근다. 취소(원본 → 결재 문서)와 승인·반려가 같은 순서로 잠그도록
+     * 결재 처리도 원본을 먼저 잠근다 (교착 방지). 테이블 이름은 문서 종류로 정해지는 상수다.
+     */
+    public void lockRef(Connection conn, String docType, long refId) throws SQLException {
+        String sql = switch (docType) {
+            case "LEAVE" -> "SELECT req_id FROM LEAVE_REQUEST WHERE req_id = ? FOR UPDATE";
+            case "EXPENSE" -> "SELECT exp_id FROM EXPENSE WHERE exp_id = ? FOR UPDATE";
+            default -> throw new IllegalArgumentException("알 수 없는 결재 문서 종류: " + docType);
+        };
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, refId);
+            ps.executeQuery().close();
+        }
+    }
+
     /** 원본 문서(휴가·경비)로 결재 문서를 찾아 잠근다. 없으면 null */
     public Long lockByRef(Connection conn, String docType, long refId) throws SQLException {
         String sql = "SELECT doc_id FROM APPROVAL_DOC WHERE doc_type = ? AND ref_id = ? FOR UPDATE";
