@@ -6,92 +6,49 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import static com.hr.HttpTestServer.YEAR;
+import static com.hr.HttpTestServer.client;
+import static com.hr.HttpTestServer.context;
+import static com.hr.HttpTestServer.database;
+import static com.hr.HttpTestServer.delete;
+import static com.hr.HttpTestServer.get;
+import static com.hr.HttpTestServer.idOf;
+import static com.hr.HttpTestServer.login;
+import static com.hr.HttpTestServer.post;
+import static com.hr.HttpTestServer.put;
+import static com.hr.HttpTestServer.scalar;
+
 import java.math.BigDecimal;
-import java.net.CookieManager;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
-import org.apache.catalina.Context;
-import org.apache.catalina.servlets.DefaultServlet;
-import org.apache.catalina.startup.Tomcat;
-import org.apache.tomcat.util.descriptor.web.FilterDef;
-import org.apache.tomcat.util.descriptor.web.FilterMap;
-import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hr.HttpTestServer.Res;
 import com.hr.d.integration.EmployeeCreator;
-import com.hr.filter.AuthFilter;
-import com.hr.listener.AppContextListener;
 import com.hr.util.ApiException;
 
-import jakarta.servlet.Filter;
-import jakarta.servlet.annotation.WebFilter;
-import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 
 /**
- * 팀 전체 흐름 HTTP 테스트 (A·B 공용 스키마 + seed.sql, 내장 Tomcat, H2 Oracle 호환 모드).
- * 실제 db/schema.sql 전체와 db/seed.sql을 그대로 실행해 DDL·시드도 함께 검증한다.
+ * 공통·인사(A) HTTP 테스트. 실제 db/schema.sql 전체와 db/seed.sql을 H2 Oracle 호환 모드에 실행해
+ * DDL·시드도 함께 검증한다 (HttpTestServer).
  */
 class TeamHttpTest {
 
-    private static final String H2_URL = "jdbc:h2:mem:team-http;MODE=Oracle;NON_KEYWORDS=YEAR;DB_CLOSE_DELAY=-1";
-    private static final ObjectMapper JSON = new ObjectMapper();
-    private static final int YEAR = LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getYear();
-
-    private static JdbcDataSource database;
-    private static Path dbProperties;
-    private static Tomcat tomcat;
-    private static Context context;
-    private static URI base;
-
     @BeforeAll
     static void start(@TempDir Path temp) throws Exception {
-        database = new JdbcDataSource();
-        database.setURL(H2_URL);
-        database.setUser("sa");
-        database.setPassword("");
-        writeDbProperties();
-        script(Files.readString(Path.of("db/schema.sql")));
-        script(Files.readString(Path.of("db/seed.sql")));
-
-        tomcat = new Tomcat();
-        tomcat.setBaseDir(temp.toString());
-        tomcat.setPort(0);
-        tomcat.getConnector().setProperty("address", "127.0.0.1");
-        context = tomcat.addContext("/hr", Path.of("src/main/webapp").toAbsolutePath().toString());
-        context.setParentClassLoader(TeamHttpTest.class.getClassLoader());
-        Tomcat.addServlet(context, "default", new DefaultServlet());
-        context.addServletMappingDecoded("/", "default");
-        context.addMimeMapping("html", "text/html");
-        context.addApplicationListener(AppContextListener.class.getName());
-        for (Class<? extends HttpServlet> c : servlets()) {
-            register(c);
-        }
-        registerFilter(new AuthFilter(), AuthFilter.class.getAnnotation(WebFilter.class).urlPatterns());
-        tomcat.start();
-        base = URI.create("http://127.0.0.1:" + tomcat.getConnector().getLocalPort() + "/hr/");
+        HttpTestServer.start(temp, servlets());
     }
 
-    /** 테스트할 서블릿. C 브랜치에서 결재·경비 서블릿을 더한다 */
     static List<Class<? extends HttpServlet>> servlets() {
         return List.of(
                 com.hr.controller.AuthServlet.class,
@@ -105,16 +62,7 @@ class TeamHttpTest {
 
     @AfterAll
     static void stop() throws Exception {
-        try {
-            if (tomcat != null) {
-                tomcat.stop();
-                tomcat.destroy();
-            }
-        } finally {
-            if (dbProperties != null) {
-                Files.deleteIfExists(dbProperties);
-            }
-        }
+        HttpTestServer.stop();
     }
 
     // ================================================================== 로그인 · 권한 (REQ-01, 02)
@@ -299,109 +247,5 @@ class TeamHttpTest {
             conn.rollback();
         }
         login("hired01", "hired2026a");
-    }
-
-    // ================================================================== 도우미
-
-    record Res(int status, String body, String location) {
-        JsonNode json() throws Exception {
-            return JSON.readTree(body);
-        }
-    }
-
-    static HttpClient client() {
-        return HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
-    }
-
-    static HttpClient login(String loginId, String password) throws Exception {
-        HttpClient c = client();
-        Res r = post(c, "api/auth/login", Map.of("loginId", loginId, "password", password));
-        assertEquals(200, r.status(), loginId + " 로그인: " + r.body());
-        return c;
-    }
-
-    static Res get(HttpClient c, String path) throws Exception {
-        return send(c, HttpRequest.newBuilder(base.resolve(path)).GET());
-    }
-
-    static Res delete(HttpClient c, String path) throws Exception {
-        return send(c, HttpRequest.newBuilder(base.resolve(path)).DELETE());
-    }
-
-    static Res post(HttpClient c, String path, Object body) throws Exception {
-        return send(c, HttpRequest.newBuilder(base.resolve(path)).header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body))));
-    }
-
-    static Res put(HttpClient c, String path, Object body) throws Exception {
-        return send(c, HttpRequest.newBuilder(base.resolve(path)).header("Content-Type", "application/json")
-                .PUT(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body))));
-    }
-
-    static Res send(HttpClient c, HttpRequest.Builder b) throws Exception {
-        HttpResponse<String> r = c.send(b.build(), HttpResponse.BodyHandlers.ofString());
-        return new Res(r.statusCode(), r.body(), r.headers().firstValue("location").orElse(""));
-    }
-
-    static long idOf(String sql) throws SQLException {
-        return ((Number) scalar(sql)).longValue();
-    }
-
-    static Object scalar(String sql, Object... params) throws SQLException {
-        try (Connection conn = database.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (int i = 0; i < params.length; i++) {
-                ps.setObject(i + 1, params[i]);
-            }
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getObject(1) : null;
-            }
-        }
-    }
-
-    static void script(String sql) throws SQLException {
-        try (Connection conn = database.getConnection(); var st = conn.createStatement()) {
-            for (String command : sql.replaceAll("(?m)^\\s*--[^\\r\\n]*", "").split(";")) {
-                if (!command.isBlank()) {
-                    st.execute(command);
-                }
-            }
-        }
-    }
-
-    static void writeDbProperties() throws Exception {
-        Properties props = new Properties();
-        props.setProperty("db.driver", "org.h2.Driver");
-        props.setProperty("db.url", H2_URL);
-        props.setProperty("db.user", "sa");
-        props.setProperty("db.password", "");
-        Path classes = Path.of(TeamHttpTest.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-        Path path = classes.resolve("db.properties");
-        try (var out = Files.newOutputStream(path, StandardOpenOption.CREATE_NEW)) {
-            dbProperties = path;
-            props.store(out, "Tests only");
-        }
-    }
-
-    static void register(Class<? extends HttpServlet> type) throws Exception {
-        WebServlet mapping = type.getAnnotation(WebServlet.class);
-        String name = type.getName();
-        Tomcat.addServlet(context, name, type.getDeclaredConstructor().newInstance());
-        String[] patterns = mapping.value().length > 0 ? mapping.value() : mapping.urlPatterns();
-        for (String pattern : patterns) {
-            context.addServletMappingDecoded(pattern, name);
-        }
-    }
-
-    static void registerFilter(Filter filter, String... patterns) {
-        FilterDef def = new FilterDef();
-        def.setFilterName(filter.getClass().getName());
-        def.setFilter(filter);
-        context.addFilterDef(def);
-        FilterMap map = new FilterMap();
-        map.setFilterName(def.getFilterName());
-        for (String pattern : patterns) {
-            map.addURLPatternDecoded(pattern);
-        }
-        context.addFilterMap(map);
     }
 }

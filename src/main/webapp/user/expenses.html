@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>경비 정산 · HR</title>
+    <link rel="stylesheet" href="../css/common.css">
+</head>
+<body>
+<!-- U06 경비 정산 (REQ-23, 31) -->
+<header id="topnav"></header>
+
+<main class="page">
+    <div class="page-head">
+        <div>
+            <h1>경비 정산</h1>
+            <div class="sub">영수증을 첨부해 정산을 요청하세요. 상사 → 인사 관리자 결재 후 지급됩니다</div>
+        </div>
+    </div>
+
+    <div class="split">
+        <section class="card">
+            <div class="card-head"><h2>새 정산 요청</h2></div>
+            <form class="card-body" id="expenseForm" novalidate>
+                <div class="field">
+                    <label for="category">분류</label>
+                    <select class="select" id="category" name="category" required></select>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="useDate">사용일</label>
+                        <input class="input" type="date" id="useDate" name="useDate" required>
+                    </div>
+                    <div class="field">
+                        <label for="amount">금액 (원)</label>
+                        <input class="input amount" id="amount" name="amount" inputmode="numeric" placeholder="0" autocomplete="off" required>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="description">내용</label>
+                    <input class="input" id="description" name="description" maxlength="200" placeholder="사용 내역 (예: 고객 미팅)" required>
+                </div>
+                <div class="field">
+                    <span id="receiptLabel" class="label-text">영수증</span>
+                    <label class="dropzone" id="dropzone">
+                        <input type="file" id="receipt" name="receipt" aria-labelledby="receiptLabel dropText"
+                               accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required>
+                        <span id="dropText">파일을 끌어오거나 클릭해서 업로드 (JPG, PNG, PDF · 5MB 이하)</span>
+                    </label>
+                </div>
+                <div class="form-error" id="formError" role="alert"></div>
+                <button class="btn btn-primary btn-block" type="submit" id="submitBtn">정산 요청</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <div class="card-head"><h2>요청 내역</h2><span class="muted" id="totalText"></span></div>
+            <table class="table">
+                <thead>
+                <tr><th>사용일</th><th>분류</th><th>내용</th><th class="num">금액</th><th>첨부</th><th>상태</th><th></th></tr>
+                </thead>
+                <tbody id="rows"><tr><td class="empty" colspan="7">불러오는 중…</td></tr></tbody>
+            </table>
+            <div class="pager" id="pager"></div>
+        </section>
+    </div>
+</main>
+
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/expense-labels.js"></script>
+<script src="../js/expenses.js"></script>
+</body>
+</html>

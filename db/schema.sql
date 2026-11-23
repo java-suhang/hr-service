@@ -173,7 +173,121 @@ CREATE INDEX IX_LEAVE_REQUEST_EMP ON LEAVE_REQUEST (emp_id);
 -- C · 결재 · 경비 · 알림
 --   APPROVAL_DOC, APPROVAL_STEP, EXPENSE, ATTACHMENT, NOTIFICATION
 -- =====================================================================
--- (C 담당 작성 예정)
+-- 결재 문서: 휴가·경비가 같이 쓴다. ref_id는 doc_type에 따라 LEAVE_REQUEST.req_id 또는 EXPENSE.exp_id를
+-- 가리키므로 FK 대신 서비스에서 존재를 확인한다. current_step은 지금 처리할 단계 순서다.
+CREATE SEQUENCE SEQ_APPROVAL_DOC START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE APPROVAL_DOC (
+    doc_id        NUMBER             CONSTRAINT PK_APPROVAL_DOC PRIMARY KEY,
+    doc_type      VARCHAR2(20)       NOT NULL,
+    ref_id        NUMBER             NOT NULL,
+    drafter_id    NUMBER             NOT NULL CONSTRAINT FK_APPROVAL_DOC_DRAFTER REFERENCES EMPLOYEE (emp_id),
+    title         VARCHAR2(200 CHAR) NOT NULL,
+    status        VARCHAR2(20)       DEFAULT 'IN_PROGRESS' NOT NULL,
+    current_step  NUMBER(2)          DEFAULT 1 NOT NULL,
+    created_at    DATE               DEFAULT SYSDATE NOT NULL,
+    completed_at  DATE,
+    CONSTRAINT UK_APPROVAL_DOC_REF    UNIQUE (doc_type, ref_id),
+    CONSTRAINT CK_APPROVAL_DOC_TYPE   CHECK (doc_type IN ('LEAVE', 'EXPENSE')),
+    CONSTRAINT CK_APPROVAL_DOC_STATUS CHECK (status IN ('IN_PROGRESS', 'APPROVED', 'REJECTED', 'CANCELED')),
+    CONSTRAINT CK_APPROVAL_DOC_DONE   CHECK ((status = 'IN_PROGRESS' AND completed_at IS NULL)
+                                          OR (status <> 'IN_PROGRESS' AND completed_at IS NOT NULL))
+);
+
+CREATE INDEX IX_APPROVAL_DOC_DRAFTER ON APPROVAL_DOC (drafter_id, status);
+CREATE INDEX IX_APPROVAL_DOC_STATUS  ON APPROVAL_DOC (status, created_at);
+
+-- 결재 단계: 1단계 상사(MANAGER) → 2단계 인사 관리자(HR). 상사가 없거나 재직 중이 아니면 HR만 남고,
+-- 상사가 관리자 권한이면 상사 단계로 끝난다. HR 단계는 관리자 누구나 처리하며 처리한 사람이 approver_id에 남는다.
+-- status: WAITING(차례 전) → PENDING(지금 차례) → APPROVED/REJECTED, 문서가 끝나 처리하지 않은 단계는 CANCELED
+CREATE SEQUENCE SEQ_APPROVAL_STEP START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE APPROVAL_STEP (
+    step_id       NUMBER             CONSTRAINT PK_APPROVAL_STEP PRIMARY KEY,
+    doc_id        NUMBER             NOT NULL CONSTRAINT FK_APPROVAL_STEP_DOC REFERENCES APPROVAL_DOC (doc_id),
+    step_order    NUMBER(2)          NOT NULL,
+    step_role     VARCHAR2(10)       NOT NULL,
+    approver_id   NUMBER             CONSTRAINT FK_APPROVAL_STEP_APPROVER REFERENCES EMPLOYEE (emp_id),
+    status        VARCHAR2(10)       DEFAULT 'WAITING' NOT NULL,
+    comment_text  VARCHAR2(500 CHAR),
+    acted_at      DATE,
+    CONSTRAINT UK_APPROVAL_STEP_ORDER  UNIQUE (doc_id, step_order),
+    CONSTRAINT CK_APPROVAL_STEP_ORDER  CHECK (step_order BETWEEN 1 AND 9),
+    CONSTRAINT CK_APPROVAL_STEP_ROLE   CHECK (step_role IN ('MANAGER', 'HR')),
+    CONSTRAINT CK_APPROVAL_STEP_STATUS CHECK (status IN ('WAITING', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELED')),
+    CONSTRAINT CK_APPROVAL_STEP_WHO    CHECK (step_role = 'HR' OR approver_id IS NOT NULL),
+    CONSTRAINT CK_APPROVAL_STEP_ACTED  CHECK ((status IN ('APPROVED', 'REJECTED') AND acted_at IS NOT NULL AND approver_id IS NOT NULL)
+                                           OR (status NOT IN ('APPROVED', 'REJECTED') AND acted_at IS NULL))
+);
+
+CREATE INDEX IX_APPROVAL_STEP_APPROVER ON APPROVAL_STEP (approver_id, status);
+CREATE INDEX IX_APPROVAL_STEP_ROLE     ON APPROVAL_STEP (step_role, status);
+
+-- 경비 정산: 최종 승인되면 APPROVED(지급 대기), 관리자가 지급하면 PAID
+CREATE SEQUENCE SEQ_EXPENSE START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE EXPENSE (
+    exp_id       NUMBER             CONSTRAINT PK_EXPENSE PRIMARY KEY,
+    emp_id       NUMBER             NOT NULL CONSTRAINT FK_EXPENSE_EMP REFERENCES EMPLOYEE (emp_id),
+    category     VARCHAR2(20)       NOT NULL,
+    amount       NUMBER(10)         NOT NULL,
+    use_date     DATE               NOT NULL,
+    description  VARCHAR2(200 CHAR) NOT NULL,
+    status       VARCHAR2(10)       DEFAULT 'PENDING' NOT NULL,
+    created_at   DATE               DEFAULT SYSDATE NOT NULL,
+    paid_at      DATE,
+    CONSTRAINT CK_EXPENSE_CATEGORY CHECK (category IN ('MEAL', 'TRANSPORT', 'TRAVEL', 'SUPPLIES', 'BOOK', 'ETC')),
+    CONSTRAINT CK_EXPENSE_AMOUNT   CHECK (amount > 0),
+    CONSTRAINT CK_EXPENSE_STATUS   CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'PAID', 'CANCELED')),
+    CONSTRAINT CK_EXPENSE_PAID     CHECK ((status = 'PAID' AND paid_at IS NOT NULL) OR (status <> 'PAID' AND paid_at IS NULL))
+);
+
+CREATE INDEX IX_EXPENSE_EMP    ON EXPENSE (emp_id, use_date);
+CREATE INDEX IX_EXPENSE_STATUS ON EXPENSE (status, use_date);
+
+-- 첨부파일 (영수증 EXPENSE, 이력서 APPLICANT). 파일은 upload.dir 폴더에 stored_name(UUID.확장자)으로 저장한다.
+-- ref_id는 ref_type에 따라 다른 테이블을 가리키므로 FK 대신 서비스에서 확인한다.
+CREATE SEQUENCE SEQ_ATTACHMENT START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE ATTACHMENT (
+    file_id      NUMBER             CONSTRAINT PK_ATTACHMENT PRIMARY KEY,
+    ref_type     VARCHAR2(20)       NOT NULL,
+    ref_id       NUMBER             NOT NULL,
+    origin_name  VARCHAR2(200 CHAR) NOT NULL,
+    stored_name  VARCHAR2(64)       NOT NULL,
+    file_size    NUMBER(10)         NOT NULL,
+    uploaded_at  DATE               DEFAULT SYSDATE NOT NULL,
+    CONSTRAINT UK_ATTACHMENT_STORED  UNIQUE (stored_name),
+    CONSTRAINT CK_ATTACHMENT_REF     CHECK (ref_type IN ('EXPENSE', 'APPLICANT')),
+    CONSTRAINT CK_ATTACHMENT_SIZE    CHECK (file_size > 0)
+);
+
+CREATE INDEX IX_ATTACHMENT_REF ON ATTACHMENT (ref_type, ref_id);
+
+-- 알림: 결재 요청·진행·결과, 경비 지급, 공지(D)
+CREATE SEQUENCE SEQ_NOTIFICATION START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE NOTIFICATION (
+    noti_id     NUMBER             CONSTRAINT PK_NOTIFICATION PRIMARY KEY,
+    emp_id      NUMBER             NOT NULL CONSTRAINT FK_NOTIFICATION_EMP REFERENCES EMPLOYEE (emp_id),
+    noti_type   VARCHAR2(20)       NOT NULL,
+    message     VARCHAR2(300 CHAR) NOT NULL,
+    link        VARCHAR2(300),
+    is_read     CHAR(1)            DEFAULT 'N' NOT NULL,
+    created_at  DATE               DEFAULT SYSDATE NOT NULL,
+    CONSTRAINT CK_NOTIFICATION_TYPE CHECK (noti_type IN ('APPROVAL_REQUEST', 'APPROVAL_STEP', 'APPROVED', 'REJECTED',
+                                                         'EXPENSE_PAID', 'NOTICE')),
+    CONSTRAINT CK_NOTIFICATION_READ CHECK (is_read IN ('Y', 'N'))
+);
+
+CREATE INDEX IX_NOTIFICATION_EMP ON NOTIFICATION (emp_id, is_read);
+
+-- C 재실행용 (필요할 때만 주석을 풀어 먼저 실행)
+-- DROP TABLE NOTIFICATION;   DROP SEQUENCE SEQ_NOTIFICATION;
+-- DROP TABLE ATTACHMENT;     DROP SEQUENCE SEQ_ATTACHMENT;
+-- DROP TABLE EXPENSE;        DROP SEQUENCE SEQ_EXPENSE;
+-- DROP TABLE APPROVAL_STEP;  DROP SEQUENCE SEQ_APPROVAL_STEP;
+-- DROP TABLE APPROVAL_DOC;   DROP SEQUENCE SEQ_APPROVAL_DOC;
 
 
 -- =====================================================================

@@ -3,3 +3,5 @@ db.driver=oracle.jdbc.OracleDriver
 db.url=jdbc:oracle:thin:@localhost:1521:xe
 db.user=
 db.password=
+# 첨부파일(영수증·이력서) 저장 폴더. 비우면 {사용자 홈}/hr-uploads. -Dhr.upload.dir, 환경 변수 HR_UPLOAD_DIR가 먼저다
+upload.dir=
