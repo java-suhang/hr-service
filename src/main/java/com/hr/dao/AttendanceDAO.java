@@ -109,10 +109,13 @@ public class AttendanceDAO {
         }
     }
 
-    /** 승인된 휴가일을 LEAVE로 표시한다. 행이 없으면 만든다. */
+    /**
+     * 승인된 휴가일을 LEAVE로 표시한다. 행이 없으면 만든다.
+     * USING 절의 자리표시자에 CAST로 타입을 붙여야 H2(테스트 DB)도 MERGE를 해석한다 (Oracle에서는 그대로 같은 뜻).
+     */
     public void markLeave(Connection conn, long empId, LocalDate date) throws SQLException {
         String sql = "MERGE INTO ATTENDANCE a"
-                + " USING (SELECT ? AS emp_id, ? AS work_date FROM dual) s"
+                + " USING (SELECT CAST(? AS NUMBER) AS emp_id, CAST(? AS DATE) AS work_date FROM dual) s"
                 + " ON (a.emp_id = s.emp_id AND a.work_date = s.work_date)"
                 + " WHEN MATCHED THEN UPDATE SET a.status = 'LEAVE'"
                 + " WHEN NOT MATCHED THEN INSERT (att_id, emp_id, work_date, status)"

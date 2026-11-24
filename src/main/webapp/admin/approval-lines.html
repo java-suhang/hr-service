@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>결재선 설정 · HR Admin</title>
+    <link rel="stylesheet" href="../css/common.css">
+</head>
+<body>
+<!-- 결재선 설정 (REQ-17): 재직자별 결재선 확인, 1단계(상사) 변경 -->
+<div class="admin-shell">
+    <aside id="sidebar"></aside>
+    <div class="admin-main">
+        <header id="topbar"></header>
+        <main class="page">
+            <div class="page-head">
+                <div>
+                    <h1>결재선 설정</h1>
+                    <div class="sub">결재선은 기안자의 상사 → 인사 관리자 순서로 자동으로 정해집니다</div>
+                </div>
+            </div>
+
+            <div class="notice-box" id="rule" style="margin-bottom:16px"></div>
+
+            <section class="card">
+                <div class="filters" style="padding-top:16px">
+                    <input class="input" id="fKeyword" placeholder="이름, 사번 검색" aria-label="검색어">
+                    <select class="select" id="fDept" aria-label="부서"><option value="">부서 전체</option></select>
+                </div>
+                <table class="table">
+                    <thead>
+                    <tr><th>사번</th><th>직원</th><th>부서 · 직급</th><th>1단계 상사</th><th>결재선</th></tr>
+                    </thead>
+                    <tbody id="rows"><tr><td class="empty" colspan="5">불러오는 중…</td></tr></tbody>
+                </table>
+                <div class="pager" id="pager"></div>
+            </section>
+        </main>
+    </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+(function () {
+    Layout.admin('approval-lines');
+    const $ = (id) => document.getElementById(id);
+    const ROLE = { MANAGER: '상사', HR: '인사 관리자' };
+    let page = 1;
+    let people = [];
+
+    const opt = (value, label, selected) =>
+        '<option value="' + esc(value) + '"' + (String(value) === String(selected ?? '') ? ' selected' : '') + '>' + esc(label) + '</option>';
+
+    function lineText(row) {
+        if (row.blocked) return '<span class="text-red">결재할 다른 관리자가 없어 신청할 수 없습니다</span>';
+        const steps = row.steps.map((s, i) => (i + 1) + '. ' + (s.role === 'MANAGER' ? esc(s.approverName) : ROLE.HR)).join(' → ');
+        return steps + (row.note ? '<div class="lines-note">' + esc(row.note) + '</div>' : '');
+    }
+
+    async function load() {
+        try {
+            const data = await api.get('admin/approval-lines', { keyword: $('fKeyword').value.trim(), deptId: $('fDept').value, page, size: 15 });
+            if (!data.items.length && page > 1) { page -= 1; return load(); }
+            $('rule').innerHTML = '<strong>인사 관리자</strong>: 관리자 권한이 있는 재직자 '
+                + (data.admins.length ? data.admins.map((a) => esc(a.name) + (a.deptName ? ' (' + esc(a.deptName) + ')' : '')).join(', ') : '없음')
+                + ' 중 누구나 처리합니다. 상사가 없거나 재직 중이 아니면 인사 관리자 1단계만, 상사가 관리자면 상사 1단계로 끝납니다.'
+                + ' 상사를 바꿔도 이미 올라간 문서의 결재선은 그대로입니다.';
+            $('rows').innerHTML = data.items.length ? data.items.map((r) => '<tr>'
+                + '<td>' + esc(r.empNo) + '</td>'
+                + '<td><strong>' + esc(r.name) + '</strong>' + (r.role === 'ADMIN' ? ' <span class="badge badge-purple">ADMIN</span>' : '') + '</td>'
+                + '<td>' + esc(r.deptName || '-') + ' · ' + esc(r.posName || '-') + '</td>'
+                + '<td><select class="select" data-emp="' + r.empId + '" aria-label="' + esc(r.name) + '의 상사">'
+                + opt('', '없음', r.managerId)
+                + people.filter((p) => p.empId !== r.empId).map((p) => opt(p.empId, p.name + ' · ' + (p.deptName || '-') + ' ' + (p.posName || ''), r.managerId)).join('')
+                + '</select></td>'
+                + '<td>' + lineText(r) + '</td></tr>').join('')
+                : '<tr><td class="empty" colspan="5">조건에 맞는 직원이 없습니다</td></tr>';
+            renderPager($('pager'), data, (p) => { page = p; load(); });
+        } catch (e) {
+            $('rows').innerHTML = '<tr><td class="empty" colspan="5">' + esc(e.message) + '</td></tr>';
+        }
+    }
+
+    $('rows').addEventListener('change', async (ev) => {
+        const sel = ev.target.closest('select[data-emp]');
+        if (!sel) return;
+        sel.disabled = true;
+        try {
+            await api.put('admin/employees/' + sel.dataset.emp + '/manager', { managerId: sel.value || null });
+            toast('상사를 바꿨습니다');
+        } catch (e) {
+            toast(e.message, 'error');
+        }
+        load();
+    });
+    $('fDept').addEventListener('change', () => { page = 1; load(); });
+    let timer = null;
+    $('fKeyword').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 1; load(); }, 300); });
+
+    api.get('admin/employees/options').then((o) => {
+        people = o.employees;
+        $('fDept').innerHTML += o.departments.map((d) => opt(d.deptId, d.name)).join('');
+    }).catch((e) => toast(e.message, 'error')).then(load);
+})();
+</script>
+</body>
+</html>

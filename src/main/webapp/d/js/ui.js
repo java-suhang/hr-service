@@ -55,10 +55,11 @@ export async function init(render) {
         const view = document.body.dataset.view;
         const admin = location.pathname.split('/').at(-2) === 'admin';
         const links = admin
-            ? [['dashboard', '대시보드'], ['attendance', '근태 관리'], ['notices', '공지 관리'],
+            ? [['dashboard', '대시보드'], ['employees', '직원 관리'], ['attendance', '근태 관리'],
+                ['approvals', '결재 관리'], ['expenses', '경비 지급'], ['notices', '공지 관리'],
                 ['evaluations', '성과 평가'], ['recruit', '채용 관리']]
-            : [['home', '홈'], ['attendance', '근태'], ['leave', '휴가'], ['notices', '공지'],
-                ['evaluation', '성과 평가'], ['interviews', '내 면접']];
+            : [['home', '홈'], ['attendance', '근태'], ['leave', '휴가'], ['approvals', '결재'], ['expenses', '경비'],
+                ['notices', '공지'], ['evaluation', '성과 평가'], ['interviews', '내 면접']];
         const nav = document.querySelector('nav');
         for (const [page, label] of links) {
             const link = h('a', {href: `${page}.html`}, label);

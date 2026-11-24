@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>경비 지급 · HR Admin</title>
+    <link rel="stylesheet" href="../css/common.css">
+</head>
+<body>
+<!-- 경비 지급 (REQ-24): 최종 승인된 경비를 지급 완료 처리 -->
+<div class="admin-shell">
+    <aside id="sidebar"></aside>
+    <div class="admin-main">
+        <header id="topbar"></header>
+        <main class="page">
+            <div class="page-head">
+                <div>
+                    <h1>경비 지급</h1>
+                    <div class="sub" id="subText">&nbsp;</div>
+                </div>
+            </div>
+            <section class="card">
+                <div class="filters" style="padding-top:16px">
+                    <select class="select" id="fStatus" aria-label="상태">
+                        <option value="APPROVED">지급 대기</option>
+                        <option value="PAID">지급 완료</option>
+                        <option value="PENDING">결재 중</option>
+                        <option value="REJECTED">반려</option>
+                        <option value="CANCELED">취소</option>
+                        <option value="ALL">전체</option>
+                    </select>
+                    <select class="select" id="fCategory" aria-label="분류"><option value="">분류 전체</option></select>
+                    <input class="input" type="date" id="fFrom" aria-label="사용일 시작">
+                    <input class="input" type="date" id="fTo" aria-label="사용일 끝">
+                    <input class="input" id="fKeyword" placeholder="직원, 내용 검색" aria-label="검색어">
+                </div>
+                <table class="table">
+                    <thead>
+                    <tr><th>사용일</th><th>직원</th><th>분류</th><th>내용</th><th class="num">금액</th><th>영수증</th><th>상태</th><th></th></tr>
+                    </thead>
+                    <tbody id="rows"><tr><td class="empty" colspan="8">불러오는 중…</td></tr></tbody>
+                </table>
+                <div class="pager" id="pager"></div>
+            </section>
+        </main>
+    </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/expense-labels.js"></script>
+<script>
+(function () {
+    Layout.admin('expenses');
+    const $ = (id) => document.getElementById(id);
+    let page = 1;
+    $('fCategory').innerHTML += EXPENSE.CATEGORIES.map(([c, l]) => '<option value="' + c + '">' + l + '</option>').join('');
+
+    async function load() {
+        try {
+            const data = await api.get('admin/expenses', { status: $('fStatus').value, category: $('fCategory').value,
+                from: $('fFrom').value, to: $('fTo').value, keyword: $('fKeyword').value.trim(), page, size: 15 });
+            if (!data.items.length && page > 1) { page -= 1; return load(); }
+            const label = $('fStatus').selectedOptions[0].textContent;
+            $('subText').textContent = label + ' ' + data.total + '건 · 합계 ' + EXPENSE.won(data.totalAmount) + '원';
+            $('rows').innerHTML = data.items.length ? data.items.map((x) => '<tr>'
+                + '<td>' + esc(x.useDate) + '</td>'
+                + '<td><strong>' + esc(x.empName) + '</strong><div class="muted">' + esc(x.deptName || '') + '</div></td>'
+                + '<td>' + esc(EXPENSE.label(x.category)) + '</td>'
+                + '<td>' + (x.docId ? '<a href="approvals.html?id=' + x.docId + '">' + esc(x.description) + '</a>' : esc(x.description)) + '</td>'
+                + '<td class="num amount">' + EXPENSE.won(x.amount) + '</td>'
+                + '<td>' + EXPENSE.clip(x.receiptId) + '</td>'
+                + '<td>' + EXPENSE.badge(x.status) + (x.paidAt ? '<div class="muted">' + esc(x.paidAt.slice(0, 10)) + '</div>' : '') + '</td>'
+                + '<td style="text-align:right">' + (x.status === 'APPROVED'
+                    ? '<button class="btn btn-sm btn-primary" type="button" data-pay="' + x.expId + '" data-who="' + esc(x.empName)
+                      + '" data-amount="' + x.amount + '">지급 완료</button>' : '') + '</td>'
+                + '</tr>').join('')
+                : '<tr><td class="empty" colspan="8">조건에 맞는 경비가 없습니다</td></tr>';
+            renderPager($('pager'), data, (p) => { page = p; load(); });
+        } catch (e) {
+            $('rows').innerHTML = '<tr><td class="empty" colspan="8">' + esc(e.message) + '</td></tr>';
+        }
+    }
+
+    $('rows').addEventListener('click', async (ev) => {
+        const b = ev.target.closest('[data-pay]');
+        if (!b) return;
+        if (!confirm(b.dataset.who + '님에게 ' + EXPENSE.won(b.dataset.amount) + '원을 지급 완료로 처리할까요?')) return;
+        b.disabled = true;
+        try {
+            await api.post('admin/expenses/' + b.dataset.pay + '/pay');
+            toast('지급 완료로 처리했습니다');
+            load();
+        } catch (e) {
+            toast(e.message, 'error');
+            b.disabled = false;
+        }
+    });
+    ['fStatus', 'fCategory', 'fFrom', 'fTo'].forEach((id) => $(id).addEventListener('change', () => { page = 1; load(); }));
+    let timer = null;
+    $('fKeyword').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 1; load(); }, 300); });
+    load();
+})();
+</script>
+</body>
+</html>
