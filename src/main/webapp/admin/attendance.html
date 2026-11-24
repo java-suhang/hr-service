@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>근태 관리 · HR Admin</title>
+    <link rel="stylesheet" href="../css/common.css">
+    <link rel="stylesheet" href="../css/attendance.css">
+</head>
+<body>
+<!-- A04 근태 관리 (+ 연차 관리 탭) -->
+<div class="admin-shell">
+    <aside id="sidebar"></aside>
+    <div class="admin-main">
+        <header id="topbar"></header>
+        <main class="page">
+            <div class="page-head">
+                <div>
+                    <h1>근태 관리</h1>
+                    <div class="sub" id="subText">&nbsp;</div>
+                </div>
+                <div class="actions" id="dailyActions">
+                    <a class="btn" id="exportBtn" href="#">엑셀 내보내기</a>
+                </div>
+                <div class="actions" id="leaveActions" hidden>
+                    <button class="btn btn-primary" id="openGrant" type="button">연차 일괄 부여</button>
+                </div>
+            </div>
+
+            <div class="tabs" role="tablist">
+                <button class="active" type="button" data-tab="daily">일별 근태</button>
+                <button type="button" data-tab="leave">연차 관리</button>
+            </div>
+
+            <!-- 일별 근태 -->
+            <section class="card" id="dailyTab">
+                <div class="filters" style="padding-top: 16px">
+                    <input class="input" type="date" id="fDate" aria-label="날짜">
+                    <select class="select dept-select" id="fDept" aria-label="부서">
+                        <option value="">부서 전체</option>
+                    </select>
+                    <select class="select" id="fStatus" aria-label="상태">
+                        <option value="">상태 전체</option>
+                        <option value="NORMAL">정상</option>
+                        <option value="LATE">지각</option>
+                        <option value="EARLY_LEAVE">조퇴</option>
+                        <option value="ABSENT">결근</option>
+                        <option value="LEAVE">휴가</option>
+                        <option value="NONE">미출근</option>
+                    </select>
+                    <input class="input" id="fQuery" placeholder="이름 검색" aria-label="이름 검색">
+                </div>
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>이름</th>
+                        <th>부서</th>
+                        <th>출근</th>
+                        <th>퇴근</th>
+                        <th class="num">근무시간</th>
+                        <th class="num">주간 누적</th>
+                        <th>상태</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody id="dailyRows"></tbody>
+                </table>
+                <div class="pager" id="dailyPager"></div>
+            </section>
+
+            <!-- 연차 관리 -->
+            <section class="card" id="leaveTab" hidden>
+                <div class="filters" style="padding-top: 16px">
+                    <select class="select" id="lYear" aria-label="연도"></select>
+                    <select class="select dept-select" id="lDept" aria-label="부서">
+                        <option value="">부서 전체</option>
+                    </select>
+                    <input class="input" id="lQuery" placeholder="이름 검색" aria-label="이름 검색">
+                </div>
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>사번</th>
+                        <th>이름</th>
+                        <th>부서</th>
+                        <th class="num">부여</th>
+                        <th class="num">사용</th>
+                        <th class="num">결재 대기</th>
+                        <th class="num">잔여</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody id="leaveRows"></tbody>
+                </table>
+                <div class="pager" id="leavePager"></div>
+            </section>
+        </main>
+    </div>
+</div>
+
+<!-- 근태 수정 -->
+<dialog class="modal" id="editModal">
+    <form id="editForm">
+        <div class="modal-head">근태 수정</div>
+        <div class="modal-body">
+            <div class="notice-box" id="editWho" style="margin-bottom: 14px"></div>
+            <div class="row">
+                <div class="field">
+                    <label for="eIn">출근</label>
+                    <input class="input" type="time" id="eIn">
+                </div>
+                <div class="field">
+                    <label for="eOut">퇴근</label>
+                    <input class="input" type="time" id="eOut">
+                </div>
+            </div>
+            <div class="field">
+                <label for="eStatus">상태</label>
+                <select class="select" id="eStatus">
+                    <option value="">자동 판정 (출퇴근 시각 기준)</option>
+                    <option value="NORMAL">정상</option>
+                    <option value="LATE">지각</option>
+                    <option value="EARLY_LEAVE">조퇴</option>
+                    <option value="ABSENT">결근</option>
+                    <option value="LEAVE">휴가</option>
+                </select>
+            </div>
+            <div class="notice-box" id="editMsg">퇴근이 출근보다 이르면 다음 날 퇴근으로 저장합니다</div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" type="button" data-close="editModal">취소</button>
+            <button class="btn btn-primary" type="submit" id="editSave">저장</button>
+        </div>
+    </form>
+</dialog>
+
+<!-- 연차 조정 -->
+<dialog class="modal" id="adjustModal">
+    <form id="adjustForm">
+        <div class="modal-head">연차 조정</div>
+        <div class="modal-body">
+            <div class="notice-box" id="adjustWho" style="margin-bottom: 14px"></div>
+            <div class="field">
+                <label for="aTotal">부여 일수</label>
+                <input class="input" type="number" id="aTotal" min="0" max="365" step="0.5" required>
+            </div>
+            <div class="notice-box" id="adjustMsg">이미 사용한 일수보다 적게 줄 수 없습니다</div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" type="button" data-close="adjustModal">취소</button>
+            <button class="btn btn-primary" type="submit" id="adjustSave">저장</button>
+        </div>
+    </form>
+</dialog>
+
+<!-- 연차 일괄 부여 -->
+<dialog class="modal" id="grantModal">
+    <form id="grantForm">
+        <div class="modal-head">연차 일괄 부여</div>
+        <div class="modal-body">
+            <div class="row">
+                <div class="field">
+                    <label for="gYear">연도</label>
+                    <input class="input" type="number" id="gYear" min="2000" max="2100" required>
+                </div>
+                <div class="field">
+                    <label for="gDays">일수</label>
+                    <input class="input" type="number" id="gDays" min="0" max="365" step="0.5" value="15" required>
+                </div>
+            </div>
+            <div class="notice-box" id="grantMsg">그해 연차가 없는 재직자에게만 부여합니다. 이미 있는 사람은 바뀌지 않습니다.</div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" type="button" data-close="grantModal">취소</button>
+            <button class="btn btn-primary" type="submit" id="grantSave">부여</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/attendance-common.js"></script>
+<script src="../js/admin-attendance.js"></script>
+</body>
+</html>
