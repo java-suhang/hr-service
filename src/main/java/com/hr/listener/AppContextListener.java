@@ -2,6 +2,7 @@ package com.hr.listener;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
+import java.sql.SQLException;
 
 import com.hr.d.integration.EmployeeCreator;
 import com.hr.d.integration.NoticeNotifier;
@@ -40,20 +41,35 @@ public class AppContextListener implements ServletContextListener {
 
     static EmployeeCreator employeeCreator() {
         EmployeeService service = new EmployeeService();
-        return (Connection conn, EmployeeCreator.Employee in, BigDecimal annualDays) -> {
-            Employee e = new Employee();
-            e.setEmpNo(in.empNo());
-            e.setLoginId(in.loginId());
-            e.setName(in.name());
-            e.setEmail(in.email());
-            e.setPhone(in.phone());
-            e.setDeptId(in.deptId());
-            e.setPosId(in.posId());
-            e.setManagerId(in.managerId());
-            e.setHireDate(in.hireDate());
-            e.setRole("USER");
-            e.setStatus(Employee.ACTIVE);
-            return service.create(conn, e, in.initialPassword(), annualDays);
+        return new EmployeeCreator() {
+            @Override
+            public long create(Connection conn, EmployeeCreator.Employee in, BigDecimal annualDays)
+                    throws SQLException {
+                return service.create(conn, toEmployee(in), in.initialPassword(), annualDays, null);
+            }
+
+            /** 채용 전환을 한 관리자 ID를 감사 로그(REQ-21)에 남긴다 */
+            @Override
+            public long create(Connection conn, EmployeeCreator.Employee in, BigDecimal annualDays, long actorId)
+                    throws SQLException {
+                return service.create(conn, toEmployee(in), in.initialPassword(), annualDays, actorId);
+            }
         };
+    }
+
+    private static Employee toEmployee(EmployeeCreator.Employee in) {
+        Employee e = new Employee();
+        e.setEmpNo(in.empNo());
+        e.setLoginId(in.loginId());
+        e.setName(in.name());
+        e.setEmail(in.email());
+        e.setPhone(in.phone());
+        e.setDeptId(in.deptId());
+        e.setPosId(in.posId());
+        e.setManagerId(in.managerId());
+        e.setHireDate(in.hireDate());
+        e.setRole("USER");
+        e.setStatus(Employee.ACTIVE);
+        return e;
     }
 }

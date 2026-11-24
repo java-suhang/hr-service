@@ -48,6 +48,7 @@ public class AttendanceService {
 
     private final AttendanceDAO attendanceDAO = new AttendanceDAO();
     private final WorkPolicyDAO policyDAO = new WorkPolicyDAO();
+    private final AuditService audit = new AuditService();
     private final Clock clock;
 
     public AttendanceService() {
@@ -77,7 +78,8 @@ public class AttendanceService {
         return p != null ? p : WorkPolicy.defaults();
     }
 
-    public WorkPolicy updatePolicy(LocalTime start, LocalTime end, int lateGraceMin, int weeklyLimitHours) {
+    public WorkPolicy updatePolicy(LocalTime start, LocalTime end, int lateGraceMin, int weeklyLimitHours,
+            long actorId) {
         if (start == null || end == null) {
             throw ApiException.badRequest("출근·퇴근 시각을 입력하세요");
         }
@@ -100,9 +102,11 @@ public class AttendanceService {
             WorkPolicy current = policyDAO.find(conn);
             if (current == null) {
                 input.setPolicyId(policyDAO.insert(conn, input));
+                audit.log(conn, actorId, AuditService.CREATE, "WORK_POLICY", input.getPolicyId(), null, input);
             } else {
                 input.setPolicyId(current.getPolicyId());
                 policyDAO.update(conn, input);
+                audit.log(conn, actorId, AuditService.UPDATE, "WORK_POLICY", input.getPolicyId(), current, input);
             }
             return input;
         });
@@ -301,7 +305,8 @@ public class AttendanceService {
      * 관리자 근태 수정 (REQ-10). 기록이 없으면 만든다.
      * status를 비우면 출퇴근 시각으로 자동 판정한다. 퇴근이 출근보다 이르면 다음 날 퇴근으로 본다.
      */
-    public Attendance adminSave(long empId, LocalDate date, LocalTime in, LocalTime out, String status) {
+    public Attendance adminSave(long empId, LocalDate date, LocalTime in, LocalTime out, String status,
+            long actorId) {
         if (date.isAfter(today())) {
             throw ApiException.badRequest("미래 날짜의 근태는 수정할 수 없습니다");
         }
@@ -343,9 +348,11 @@ public class AttendanceService {
             } else {
                 attendanceDAO.updateTimes(conn, current.getAttId(), checkIn, finalOut, finalStatus);
             }
-            // TODO(A): 감사 로그(REQ-21) — AuditService가 정해지면 변경 전(current)·후 값을 남긴다
 
             Attendance saved = attendanceDAO.findByEmpAndDate(conn, empId, date, false);
+            // 근태 수정과 같은 트랜잭션에서 남긴다 (새로 만들면 CREATE, 고치면 UPDATE)
+            audit.log(conn, actorId, current == null ? AuditService.CREATE : AuditService.UPDATE, "ATTENDANCE",
+                    saved.getAttId(), current, saved);
             enrich(saved, p);
             return saved;
         });

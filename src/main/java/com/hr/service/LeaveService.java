@@ -38,6 +38,7 @@ public class LeaveService {
     private final LeaveBalanceDAO balanceDAO = new LeaveBalanceDAO();
     private final AttendanceDAO attendanceDAO = new AttendanceDAO();
     private final ApprovalService approvalService = new ApprovalService();
+    private final AuditService audit = new AuditService();
 
     // ================================================================== 직원 (U04)
 
@@ -196,7 +197,7 @@ public class LeaveService {
     }
 
     /** 부여 일수를 정한다. 그해 연차 행이 없으면 만든다. 이미 쓴 일수보다 적게는 줄 수 없다. */
-    public LeaveBalance adjustBalance(long empId, int year, BigDecimal totalDays) {
+    public LeaveBalance adjustBalance(long empId, int year, BigDecimal totalDays, long actorId) {
         validateYear(year);
         validateDays(totalDays);
         return DBUtil.tx(conn -> {
@@ -216,19 +217,40 @@ public class LeaveService {
                 }
                 balanceDAO.updateTotal(conn, empId, year, totalDays);
             }
-            // TODO(A): 감사 로그(REQ-21) — AuditService가 정해지면 변경 전·후 값을 남긴다
+            // 연차 조정과 같은 트랜잭션에서 남긴다 (연차 행이 없었으면 CREATE)
+            LeaveBalance saved = balanceDAO.find(conn, empId, year, false);
+            audit.log(conn, actorId, current == null ? AuditService.CREATE : AuditService.UPDATE, "LEAVE_BALANCE",
+                    empId, current == null ? null : auditView(current), auditView(saved));
             return balance(conn, empId, year);
         });
     }
 
     /** 그해 연차가 없는 재직자 전원에게 일괄 부여. 부여한 인원 수를 돌려준다. */
-    public int grantAll(int year, BigDecimal days) {
+    public int grantAll(int year, BigDecimal days, long actorId) {
         validateYear(year);
         validateDays(days);
-        return DBUtil.tx(conn -> balanceDAO.grantMissing(conn, year, days));
+        return DBUtil.tx(conn -> {
+            // 대상 직원을 먼저 조회하고, 직원마다 부여와 감사 로그를 같은 트랜잭션에서 남긴다
+            List<Long> targets = balanceDAO.findMissingEmpIds(conn, year);
+            for (Long empId : targets) {
+                balanceDAO.insert(conn, empId, year, days);
+                LeaveBalance saved = balanceDAO.find(conn, empId, year, false);
+                audit.log(conn, actorId, AuditService.CREATE, "LEAVE_BALANCE", empId, null, auditView(saved));
+            }
+            return targets.size();
+        });
     }
 
     // ================================================================== 도우미
+
+    /** 감사 로그에는 DB에 저장되는 값(연도·부여·사용)만 남긴다. 조회용 계산 값은 뺀다. */
+    private static Map<String, Object> auditView(LeaveBalance b) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("year", b.getYear());
+        m.put("totalDays", b.getTotalDays());
+        m.put("usedDays", b.getUsedDays());
+        return m;
+    }
 
     LeaveBalance balance(Connection conn, long empId, int year) throws SQLException {
         LeaveBalance b = balanceDAO.find(conn, empId, year, false);

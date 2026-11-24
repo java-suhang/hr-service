@@ -157,6 +157,18 @@ public class EmployeeService {
         return id;
     }
 
+    /**
+     * 채용 전환용: 직원 생성 + 감사 로그(CREATE)를 호출하는 쪽 트랜잭션에서 남긴다.
+     * 감사 로그에는 비밀번호 해시가 들어가지 않는다 (Employee DTO에 해시가 없다).
+     * actorId가 null이면 작업자 없이 기록한다 (관리자 ID를 모르는 옛 호출).
+     */
+    public long create(Connection conn, Employee e, String initialPassword, BigDecimal annualDays, Long actorId)
+            throws SQLException {
+        long id = create(conn, e, initialPassword, annualDays);
+        audit.log(conn, actorId, AuditService.CREATE, "EMPLOYEE", id, null, employeeDAO.findById(conn, id));
+        return id;
+    }
+
     // ================================================================== 수정 · 퇴사
 
     public Employee update(long empId, Map<String, Object> body, long actorId) {

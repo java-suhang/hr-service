@@ -24,11 +24,11 @@
 | REQ-04·05 직원 | `admin/employees.html`, `/api/admin/employees` 검색·페이지·등록(+올해 연차)·수정·퇴사 |
 | REQ-06 부서·직급 | `admin/departments.html`, `/api/admin/departments`, `/api/admin/positions` |
 | REQ-07 내 정보·조직도 | `user/me.html`, `GET /api/me`, `GET /api/org` (연락처 가운데 가림) |
-| REQ-21 감사 로그 | `admin/audit.html`, `GET /api/admin/audit-logs`. 다른 도메인은 `AuditService.log(conn, actorId, action, table, id, before, after)` |
-| REQ-22 증명서 | `user/certificate.html` (재직증명서, 브라우저 인쇄로 PDF 저장) |
+| REQ-21 감사 로그 | `admin/audit.html`, `GET /api/admin/audit-logs`. 다른 도메인은 `AuditService.log(conn, actorId, action, table, id, before, after)`. 직원·부서·직급·비밀번호·결재·경비·이력서에 더해 관리자 근태 수정(`ATTENDANCE`), 근무 규칙(`WORK_POLICY`), 연차 조정·일괄 부여(`LEAVE_BALANCE`), 채용 전환 직원 생성(`EMPLOYEE`)도 데이터 변경과 같은 트랜잭션에서 남긴다 |
+| REQ-22 증명서 | `user/certificate.html` 재직증명서, `user/certificate.html?type=career` 경력증명서(담당 업무·용도는 인쇄 전 화면에서 입력). 브라우저 인쇄로 PDF 저장, 재직자 본인만 발급 |
 
 - 공통 모듈(`BaseServlet`, `DBUtil`, `JsonUtil`, `ApiException`, `LoginUser`, `AuthFilter`, `api.js`, `layout.js`, `common.css`)은 B가 만든 형식을 그대로 이어받아 A가 관리합니다. DB 제약 조건 위반(중복·참조·CHECK)은 500 대신 409·400으로 응답합니다.
-- D의 채용 전환용 `EmployeeCreator`는 `AppContextListener`가 등록합니다. `EmployeeService.create(conn, employee, initialPassword, annualDays)`를 호출해 직원과 올해 연차를 같은 트랜잭션에서 만듭니다.
+- D의 채용 전환용 `EmployeeCreator`는 `AppContextListener`가 등록합니다. `EmployeeService.create(conn, employee, initialPassword, annualDays, actorId)`를 호출해 직원과 올해 연차를 같은 트랜잭션에서 만들고, 채용 전환을 한 관리자 ID로 감사 로그(`EMPLOYEE` CREATE)를 남깁니다. 관리자 ID가 없는 옛 3개 인자 `create`도 남아 있어 기존 어댑터는 그대로 동작합니다.
 - 세션 쿠키는 `HttpOnly`, `SameSite=Lax`이고 로그인할 때 세션을 새로 발급합니다.
 
 ## C · 결재 · 경비 · 알림 · 첨부

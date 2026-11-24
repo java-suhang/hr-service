@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>재직증명서 · HR</title>
+    <title>증명서 · HR</title>
     <style>
         body { font-family: "Pretendard", "Malgun Gothic", sans-serif; background: #f5f6f8; margin: 0; color: #111827; }
         .toolbar { display: flex; justify-content: center; gap: 8px; padding: 16px; }
@@ -19,11 +19,18 @@
         .company { text-align: center; margin-top: 12mm; font-size: 20px; font-weight: 700; letter-spacing: 4px; }
         .no { font-size: 12px; color: #6b7280; margin-bottom: 10mm; }
         .error { text-align: center; color: #dc2626; padding: 40px; }
-        @media print { body { background: #fff; } .toolbar { display: none; } .paper { margin: 0; } }
+        /* 경력증명서: 담당 업무·용도는 화면에서 입력하고, 인쇄물에는 입력한 글자만 나온다 */
+        .field-input { width: 100%; box-sizing: border-box; height: 34px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+        .field-print { display: none; white-space: pre-wrap; word-break: break-all; min-height: 1.4em; }
+        .field-hint { margin: 8px 0 0; font-size: 12px; color: #6b7280; }
+        @media print {
+            body { background: #fff; } .toolbar, .field-hint { display: none; } .paper { margin: 0; }
+            .field-input { display: none; } .field-print { display: block; }
+        }
     </style>
 </head>
 <body>
-<!-- 재직증명서 (REQ-22): 브라우저 인쇄로 PDF 저장 -->
+<!-- 재직증명서·경력증명서 (REQ-22): 브라우저 인쇄로 PDF 저장. certificate.html?type=career 는 경력증명서 -->
 <div class="toolbar">
     <button type="button" class="primary" onclick="window.print()">인쇄 · PDF 저장</button>
     <button type="button" onclick="window.close()">닫기</button>
@@ -34,6 +41,44 @@
 (function () {
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fmt = (iso) => { const [y, m, d] = iso.split('-'); return `${y}년 ${Number(m)}월 ${Number(d)}일`; };
+    const TYPE = new URLSearchParams(location.search).get('type') || 'employment';
+    // 경력증명서의 발급일·근무 기간은 브라우저 시간대와 관계없이 한국 시간 기준이다
+    const seoulToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    /** 입사일부터 오늘까지 채운 개월 수를 "N년 M개월"로 (0인 단위는 생략) */
+    function tenure(hireIso, todayIso) {
+        const [hy, hm, hd] = hireIso.split('-').map(Number);
+        const [ty, tm, td] = todayIso.split('-').map(Number);
+        const total = (ty - hy) * 12 + (tm - hm) - (td < hd ? 1 : 0);
+        const years = Math.floor(total / 12), months = total % 12;
+        if (total < 1) return '1개월 미만';
+        return [years ? `${years}년` : '', months ? `${months}개월` : ''].filter(Boolean).join(' ');
+    }
+    function careerPaper(me) {
+        const todayIso = seoulToday();
+        const [ty, tm, td] = todayIso.split('-');
+        if (me.hireDate > todayIso) throw new Error('입사일 이후부터 발급할 수 있습니다');
+        document.title = '경력증명서 · HR';
+        document.getElementById('paper').innerHTML = `
+            <div class="no">제 ${ty}-${esc(me.empNo)}-${tm}${td} 호</div>
+            <h1>경력증명서</h1>
+            <table>
+                <tr><th>성명</th><td>${esc(me.name)}</td></tr>
+                <tr><th>사번</th><td>${esc(me.empNo)}</td></tr>
+                <tr><th>소속</th><td>${esc(me.deptName || '-')}</td></tr>
+                <tr><th>직급</th><td>${esc(me.posName || '-')}</td></tr>
+                <tr><th>근무 기간</th><td>${fmt(me.hireDate)} ~ 현재 (${tenure(me.hireDate, todayIso)})</td></tr>
+                <tr><th>담당 업무</th><td><input class="field-input" id="inDuty" maxlength="200" placeholder="예: 인사 시스템 개발" aria-label="담당 업무"><div class="field-print" id="outDuty"></div></td></tr>
+                <tr><th>용도</th><td><input class="field-input" id="inUse" maxlength="100" placeholder="예: 제출용" aria-label="용도"><div class="field-print" id="outUse"></div></td></tr>
+            </table>
+            <p class="field-hint">담당 업무와 용도를 입력한 뒤 인쇄하세요. 입력한 글자만 인쇄됩니다.</p>
+            <p class="purpose">위 사람은 위와 같이 당사에 근무하고 있음을 증명합니다.</p>
+            <div class="issued">${fmt(todayIso)}</div>
+            <div class="company">HR Service 주식회사</div>`;
+        [['inDuty', 'outDuty'], ['inUse', 'outUse']].forEach(([i, o]) => {
+            const input = document.getElementById(i), out = document.getElementById(o);
+            input.addEventListener('input', () => { out.textContent = input.value; });
+        });
+    }
     fetch('../api/me', { credentials: 'same-origin' })
         .then((res) => {
             if (res.status === 401) { location.href = '../login.html'; throw new Error('로그인이 필요합니다'); }
@@ -41,6 +86,8 @@
         })
         .then((me) => {
             if (me.status === 'RESIGNED') throw new Error('재직 중인 직원만 발급할 수 있습니다');
+            if (TYPE === 'career') return careerPaper(me);
+            if (TYPE !== 'employment') throw new Error('알 수 없는 증명서 종류입니다');
             const today = new Date();
             const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
             const no = `제 ${today.getFullYear()}-${esc(me.empNo)}-${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')} 호`;

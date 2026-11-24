@@ -65,7 +65,8 @@ public class AttendanceAdminServlet extends BaseServlet {
                 requireDate(body.get("workDate"), "근무일"),
                 time(body.get("checkIn"), "출근 시각"),
                 time(body.get("checkOut"), "퇴근 시각"),
-                text(body.get("status"))));
+                text(body.get("status")),
+                loginUser(req).getEmpId()));
     }
 
     private DailyFilter filter(HttpServletRequest req) {

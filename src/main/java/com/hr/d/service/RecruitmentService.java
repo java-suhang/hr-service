@@ -80,7 +80,7 @@ public final class RecruitmentService {
     }
 
     public long hire(long id, String empNo, String loginId, String password, Long manager, LocalDate date,
-                     BigDecimal days, EmployeeCreator creator) {
+                     BigDecimal days, long actorId, EmployeeCreator creator) {
         if (creator == null) throw Problem.unavailable("직원 등록 서비스 연동이 필요합니다.");
         return DBUtil.tx(conn -> {
             var applicant = dao.lockApplicant(conn, id);
@@ -89,7 +89,7 @@ public final class RecruitmentService {
             var employee = new EmployeeCreator.Employee(empNo, loginId, password, (String) applicant.get("name"),
                     (String) applicant.get("email"), (String) applicant.get("phone"),
                     number(applicant, "deptId"), number(applicant, "posId"), manager, date);
-            long employeeId = creator.create(conn, employee, days);
+            long employeeId = creator.create(conn, employee, days, actorId);
             if (employeeId <= 0) throw new SQLException("Employee creator returned an invalid ID");
             dao.changeStage(conn, id, "HIRED", employeeId);
             return employeeId;

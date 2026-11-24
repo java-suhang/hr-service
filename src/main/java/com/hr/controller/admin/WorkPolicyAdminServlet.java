@@ -34,6 +34,7 @@ public class WorkPolicyAdminServlet extends BaseServlet {
                 time(body.get("startTime"), "출근 시각"),
                 time(body.get("endTime"), "퇴근 시각"),
                 intValue(body.get("lateGraceMin"), "지각 유예", -1),
-                intValue(body.get("weeklyLimitHours"), "주 근무 한도", -1)));
+                intValue(body.get("weeklyLimitHours"), "주 근무 한도", -1),
+                loginUser(req).getEmpId()));
     }
 }
