@@ -1,5 +1,5 @@
 /*
- * 공통 API 호출 — [임시] A 담당. A의 api.js가 들어오면 교체한다.
+ * 공통 API 호출 (사용자·어드민 화면 공용)
  *
  *   const data = await api.get('attendance', { month: '2026-11' });
  *   await api.post('leaves', { leaveType: 'ANNUAL', ... });
@@ -16,7 +16,7 @@
         }
     }
 
-    async function request(method, path, { params, body } = {}) {
+    async function request(method, path, { params, body, form } = {}) {
         const url = new URL(path, API_BASE);
         if (params) {
             Object.entries(params).forEach(([k, v]) => {
@@ -24,7 +24,9 @@
             });
         }
         const options = { method, credentials: 'same-origin', headers: {} };
-        if (body !== undefined) {
+        if (form !== undefined) {
+            options.body = form; // FormData: 브라우저가 multipart 경계를 붙인다
+        } else if (body !== undefined) {
             options.headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(body);
         }
@@ -104,6 +106,8 @@
         post: (path, body) => request('POST', path, { body: body === undefined ? {} : body }),
         put: (path, body) => request('PUT', path, { body }),
         del: (path) => request('DELETE', path),
+        /** 파일 업로드 (FormData, multipart/form-data) */
+        upload: (path, formData) => request('POST', path, { form: formData }),
         url: (path, params) => {
             const url = new URL(path, API_BASE);
             Object.entries(params || {}).forEach(([k, v]) => {

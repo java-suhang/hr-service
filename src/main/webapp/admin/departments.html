@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>부서·직급 · HR Admin</title>
+    <link rel="stylesheet" href="../css/common.css">
+</head>
+<body>
+<!-- 부서·직급 관리 (REQ-06) -->
+<div class="admin-shell">
+    <aside id="sidebar"></aside>
+    <div class="admin-main">
+        <header id="topbar"></header>
+        <main class="page">
+            <div class="page-head">
+                <div>
+                    <h1>부서 · 직급</h1>
+                    <div class="sub">직원 기록(퇴사자 포함)이 있는 부서·직급은 삭제할 수 없어요</div>
+                </div>
+            </div>
+            <div class="stats" style="grid-template-columns:1fr 1fr;align-items:start">
+                <section class="card">
+                    <div class="card-head"><h2>부서</h2><button class="btn btn-sm btn-primary" type="button" data-add="dept">+ 부서 추가</button></div>
+                    <table class="table">
+                        <thead><tr><th>부서명</th><th class="num">인원</th><th></th></tr></thead>
+                        <tbody id="deptRows"></tbody>
+                    </table>
+                </section>
+                <section class="card">
+                    <div class="card-head"><h2>직급</h2><button class="btn btn-sm btn-primary" type="button" data-add="pos">+ 직급 추가</button></div>
+                    <table class="table">
+                        <thead><tr><th class="num">레벨</th><th>직급명</th><th class="num">인원</th><th></th></tr></thead>
+                        <tbody id="posRows"></tbody>
+                    </table>
+                </section>
+            </div>
+        </main>
+    </div>
+</div>
+
+<dialog class="modal" id="orgModal">
+    <form id="orgForm">
+        <div class="modal-head" id="orgTitle"></div>
+        <div class="modal-body">
+            <div class="field"><label for="oName">이름</label><input class="input" id="oName" maxlength="50" required></div>
+            <div class="field" id="levelField"><label for="oLevel">레벨 (클수록 상위 직급, 1~99)</label>
+                <input class="input" type="number" id="oLevel" min="1" max="99"></div>
+            <div class="form-error" id="orgError" role="alert"></div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" type="button" data-close="orgModal">취소</button>
+            <button class="btn btn-primary" type="submit">저장</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+(function () {
+    Layout.admin('departments');
+    const $ = (id) => document.getElementById(id);
+    let depts = [], positions = [], editing = null;
+
+    const actions = (kind, id) => `<td style="text-align:right;white-space:nowrap">
+        <button class="link-btn" data-edit="${kind}" data-id="${id}">수정</button>
+        <button class="link-btn danger" data-del="${kind}" data-id="${id}" style="margin-left:8px">삭제</button></td>`;
+
+    async function load() {
+        try {
+            [depts, positions] = await Promise.all([api.get('admin/departments'), api.get('admin/positions')]);
+            $('deptRows').innerHTML = depts.length ? depts.map((d) =>
+                `<tr><td>${esc(d.name)}</td><td class="num">${d.employeeCount}명</td>${actions('dept', d.deptId)}</tr>`).join('')
+                : '<tr><td class="empty" colspan="3">부서가 없습니다</td></tr>';
+            $('posRows').innerHTML = positions.length ? positions.map((p) =>
+                `<tr><td class="num">${p.level}</td><td>${esc(p.name)}</td><td class="num">${p.employeeCount}명</td>${actions('pos', p.posId)}</tr>`).join('')
+                : '<tr><td class="empty" colspan="4">직급이 없습니다</td></tr>';
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function open(kind, item) {
+        editing = { kind, item };
+        $('orgTitle').textContent = (kind === 'dept' ? '부서 ' : '직급 ') + (item ? '수정' : '추가');
+        $('oName').value = item ? item.name : '';
+        $('levelField').hidden = kind !== 'pos';
+        $('oLevel').value = item ? item.level : (positions.length ? Math.max(...positions.map((p) => p.level)) + 1 : 1);
+        $('orgError').textContent = '';
+        $('orgModal').showModal();
+    }
+
+    $('orgForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const { kind, item } = editing;
+        const path = kind === 'dept' ? 'admin/departments' : 'admin/positions';
+        const body = { name: $('oName').value.trim() };
+        if (kind === 'pos') body.level = $('oLevel').value;
+        try {
+            if (item) await api.put(`${path}/${kind === 'dept' ? item.deptId : item.posId}`, body);
+            else await api.post(path, body);
+            $('orgModal').close();
+            toast('저장했습니다');
+            load();
+        } catch (err) { $('orgError').textContent = err.message; }
+    });
+
+    document.addEventListener('click', async (e) => {
+        const add = e.target.closest('[data-add]');
+        const edit = e.target.closest('[data-edit]');
+        const del = e.target.closest('[data-del]');
+        if (add) open(add.dataset.add, null);
+        if (edit) {
+            const id = Number(edit.dataset.id);
+            open(edit.dataset.edit, edit.dataset.edit === 'dept' ? depts.find((d) => d.deptId === id) : positions.find((p) => p.posId === id));
+        }
+        if (del) {
+            if (!confirm('삭제할까요?')) return;
+            try {
+                await api.del(`${del.dataset.del === 'dept' ? 'admin/departments' : 'admin/positions'}/${del.dataset.id}`);
+                toast('삭제했습니다');
+                load();
+            } catch (err) { toast(err.message, 'error'); }
+        }
+    });
+    document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => $(b.dataset.close).close()));
+    load();
+})();
+</script>
+</body>
+</html>
