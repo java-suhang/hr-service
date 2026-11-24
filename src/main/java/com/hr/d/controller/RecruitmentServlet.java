@@ -58,14 +58,14 @@ public final class RecruitmentServlet extends DomainServlet {
                     yield created(Map.of("interviewId", service.addInterview(id, Input.id(body, "interviewerId"),
                             Input.dateTime(body, "scheduledAt"))));
                 }
-                case "hire" -> hire(req, service, id);
+                case "hire" -> hire(req, actor, service, id);
                 default -> throw Problem.missing();
             };
         }
         throw Problem.missing();
     }
 
-    private Reply hire(HttpServletRequest req, RecruitmentService service, long id) throws IOException {
+    private Reply hire(HttpServletRequest req, Actor actor, RecruitmentService service, long id) throws IOException {
         var body = Json.body(req);
         String password = Input.text(body, "initialPassword", 128);
         if (password.length() < 12 || !password.equals(body.get("initialPassword").textValue())) {
@@ -74,7 +74,7 @@ public final class RecruitmentServlet extends DomainServlet {
         var days = body.has("annualDays")
                 ? Input.decimal(body, "annualDays", BigDecimal.ZERO, BigDecimal.valueOf(366), 1) : BigDecimal.valueOf(15);
         long employee = service.hire(id, Input.text(body, "empNo", 30), Input.text(body, "loginId", 100), password,
-                Input.optionalId(body, "managerId"), Input.date(body, "hireDate"), days, integration(EmployeeCreator.class));
+                Input.optionalId(body, "managerId"), Input.date(body, "hireDate"), days, actor.id(), integration(EmployeeCreator.class));
         return created(Map.of("applicantId", id, "empId", employee, "stage", "HIRED"));
     }
 

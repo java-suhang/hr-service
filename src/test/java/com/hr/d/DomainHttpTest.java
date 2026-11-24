@@ -351,6 +351,33 @@ class DomainHttpTest {
         mutate(admin, "POST", path, command, 409);
     }
 
+    @Test
+    void hirePassesLoggedInAdminIdToCreator() throws Exception {
+        long id = applicant(posting());
+        stage(id, "INTERVIEW", 200);
+        stage(id, "OFFER", 200);
+        long[] seenActor = {-1};
+        context.getServletContext().setAttribute(EmployeeCreator.class.getName(), new EmployeeCreator() {
+            @Override
+            public long create(Connection conn, EmployeeCreator.Employee employee, java.math.BigDecimal days)
+                    throws SQLException {
+                createEmployee(conn, employee, days, 21);
+                return 21;
+            }
+
+            @Override
+            public long create(Connection conn, EmployeeCreator.Employee employee, java.math.BigDecimal days, long actorId)
+                    throws SQLException {
+                seenActor[0] = actorId;
+                return create(conn, employee, days);
+            }
+        });
+        var command = Map.of("empNo", "H-02", "loginId", "new-user2", "initialPassword", "test-only-password",
+                "hireDate", LocalDate.now().toString(), "annualDays", 15);
+        mutate(admin, "POST", applicantPath(id) + "/hire", command, 201);
+        assertEquals(1, seenActor[0], "로그인한 관리자 ID(감사 로그 작업자)가 어댑터까지 전달돼야 한다");
+    }
+
     private static void createEmployee(Connection conn, EmployeeCreator.Employee employee, java.math.BigDecimal days, long id)
             throws SQLException {
         execute(conn, """

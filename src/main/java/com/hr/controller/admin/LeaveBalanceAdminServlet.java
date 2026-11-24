@@ -45,7 +45,8 @@ public class LeaveBalanceAdminServlet extends BaseServlet {
         ok(resp, leaveService.adjustBalance(
                 requireId(body.get("empId"), "직원"),
                 intValue(body.get("year"), "연도", LocalDate.now().getYear()),
-                requireDecimal(body.get("totalDays"), "부여 일수")));
+                requireDecimal(body.get("totalDays"), "부여 일수"),
+                loginUser(req).getEmpId()));
     }
 
     @Override
@@ -57,7 +58,8 @@ public class LeaveBalanceAdminServlet extends BaseServlet {
         Map<String, Object> body = readJson(req);
         int granted = leaveService.grantAll(
                 intValue(body.get("year"), "연도", LocalDate.now().getYear()),
-                requireDecimal(body.get("days"), "부여 일수"));
+                requireDecimal(body.get("days"), "부여 일수"),
+                loginUser(req).getEmpId());
         ok(resp, Map.of("granted", granted));
     }
 }

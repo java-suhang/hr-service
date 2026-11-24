@@ -86,6 +86,23 @@ public class LeaveBalanceDAO {
         }
     }
 
+    /** 해당 연도 연차 행이 없는 재직자의 emp_id (일괄 부여 대상) */
+    public List<Long> findMissingEmpIds(Connection conn, int year) throws SQLException {
+        String sql = "SELECT e.emp_id FROM EMPLOYEE e WHERE e.status <> 'RESIGNED'"
+                + " AND NOT EXISTS (SELECT 1 FROM LEAVE_BALANCE b WHERE b.emp_id = e.emp_id AND b.year = ?)"
+                + " ORDER BY e.emp_id";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, year);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Long> ids = new ArrayList<>();
+                while (rs.next()) {
+                    ids.add(rs.getLong(1));
+                }
+                return ids;
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ 관리자 목록
 
     public int countForAdmin(Connection conn, Long deptId, String keyword) throws SQLException {
